@@ -1,0 +1,56 @@
+# TagSync
+
+**TagSync** is an open-source, Linux-first toolkit for selective, tag-driven file backup and synchronization, built around extended attributes (xattrs).  
+Unlike traditional backup or sync solutions, TagSync lets you decide exactly which files, directories, or special objects are included—simply by tagging them.  
+No special folders, no messy inclusion/exclusion lists, and no accidental duplication. Just tag it, sync it.
+
+## Project Structure
+
+TagSync is built as a modular suite, where each utility does one thing well, and all tools share a consistent philosophy and naming scheme:
+
+### Core Modules
+
+- **TagBak**  
+  One-way, selective backup utility.  
+  Copies only tagged objects (and their directory hierarchies) to a destination, never follows symlinks, and never recurses into its own backup output.
+  - *CLI tools*: `tbak`, `ts-bak`
+  - Current stable module (v0.1.1)
+
+- **TagRestore** *(planned)*  
+  Restore utility, reconstructs files/directories from backups, guided by tags and preserved hierarchy.
+
+- **TagSync** *(planned)*  
+  Full-featured, one-way or two-way sync utility.  
+  Lets you move or rename files anywhere on the filesystem—your tag follows the file, so duplicates and accidental overwrites are a thing of the past.
+
+- **TagSearch** *(planned)*  
+  Find tagged objects, search by ID, backup status, or tag content.
+
+- **TagReport** *(planned)*  
+  Generate detailed reports about backup status, last sync dates, missing/extra files, or ID collisions.
+
+## Philosophy
+
+- **Selective:** Only what you tag is backed up or synced.
+- **Portable:** No reliance on proprietary folder structures or databases. All tracking info lives on the files themselves.
+- **Transparent:** Command-line tools and planned GUI integrations let you see, manage, and verify tag status anytime.
+- **Modular:** Use only the utilities you want; everything works standalone or together.
+- **Safe:** Never backs up its own output, never follows symlinks, never surprises you.
+
+## Example CLI Utility Names
+
+- `tbak` or `ts-bak` — TagBak (one-way backup)
+- `ts-restore` — TagRestore
+- `tsync` or `ts-sync` — TagSync (sync engine)
+- `ts-search` — TagSearch
+- `ts-report` — TagReport
+
+## Project Status
+
+- **TagBak** (v0.1.1): Implements core tagging and selective backup.
+- Other modules: *Planned/in development.*
+
+---
+
+*TagSync: Backup and sync, on your terms, only what you choose.*
+
