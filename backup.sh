@@ -14,19 +14,17 @@ fi
 ABS_SRC=$(realpath "$SRC")
 ABS_DEST=$(realpath "$DEST")
 
-# Exclude the destination from being scanned/backed up
-find "$ABS_SRC" \( -type f -o -type d \) \
-  ! -path "$ABS_DEST" \
-  ! -path "$ABS_DEST/*" \
-  -print0 | while IFS= read -r -d '' OBJ; do
+# Exclude the destination dir and any symlinks from scan/copy
+find "$ABS_SRC" \( -type f -o -type d \) ! -type l \
+  ! -path "$ABS_DEST" ! -path "$ABS_DEST/*" -print0 | while IFS= read -r -d '' OBJ; do
     if getfattr --only-values -n "$XATTR_NAME" "$OBJ" &>/dev/null; then
       if [[ -d "$OBJ" ]]; then
-        rsync -iauHAX --relative "$OBJ" "$ABS_DEST/"
+        rsync -iauHAXP --no-links --relative "$OBJ" "$ABS_DEST/"
       else
         REL_PATH="${OBJ#$ABS_SRC/}"
         DEST_PATH="$ABS_DEST/$REL_PATH"
         mkdir -p "$(dirname "$DEST_PATH")"
-        rsync -iauHAX --relative "$OBJ" "$ABS_DEST/"
+        rsync -iauHAXP --no-links --relative "$OBJ" "$ABS_DEST/"
       fi
     fi
 done
