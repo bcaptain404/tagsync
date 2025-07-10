@@ -83,7 +83,8 @@ for SRC in "${SRC_LIST[@]}"; do
             if ! rsync -iauHAXP --no-links --relative "$OBJ" "$ABS_DEST/"; then
               warn "WARNING: rsync failed for $OBJ"
             else
-              vlog "Backed up directory: $OBJ"
+              log "Backed up directory: $OBJ"
+              vlog "rsync (dir) succeeded: $OBJ"
             fi
           fi
         else
@@ -99,7 +100,8 @@ for SRC in "${SRC_LIST[@]}"; do
             if ! rsync -iauHAXP --no-links --relative "$OBJ" "$ABS_DEST/"; then
               warn "WARNING: rsync failed for $OBJ"
             else
-              vlog "Backed up file: $OBJ"
+              log "Backed up file: $OBJ"
+              vlog "rsync (file) succeeded: $OBJ"
             fi
           fi
         fi

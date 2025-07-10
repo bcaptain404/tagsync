@@ -25,7 +25,6 @@ EOF
 }
 
 PATHS=()
-# Parse flags/options
 while [[ $# -gt 0 ]]; do
   case "$1" in
     -h|--help) show_help; exit 0 ;;
@@ -71,6 +70,7 @@ for OBJ in "${PATHS[@]}"; do
       log "[DRY-RUN] Would unset $XATTR_NAME from $OBJ"
     else
       if setfattr $FATTR_FLAG -x "$XATTR_NAME" "$OBJ"; then
+        log "Untagged $OBJ"
         vlog "Unset $XATTR_NAME from $OBJ"
       else
         warn "WARNING: Failed to unset $XATTR_NAME from $OBJ"
@@ -82,6 +82,7 @@ for OBJ in "${PATHS[@]}"; do
       log "[DRY-RUN] Would set $XATTR_NAME=$ID on $OBJ"
     else
       if setfattr $FATTR_FLAG -n "$XATTR_NAME" -v "$ID" "$OBJ"; then
+        log "Tagged $OBJ"
         vlog "Set $XATTR_NAME=$ID on $OBJ"
       else
         warn "WARNING: Failed to set $XATTR_NAME on $OBJ"

@@ -62,6 +62,7 @@ for OBJ in "${PATHS[@]}"; do
   if [[ -n "$ID" ]]; then
     log "$OBJ: $ID"
   else
-    vlog "$OBJ: [not set]"
+    log "$OBJ: [not set]"
+    # Or: vlog "$OBJ: [not set]" to only show with --verbose if you prefer
   fi
 done
