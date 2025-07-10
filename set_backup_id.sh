@@ -1,11 +1,27 @@
 #!/bin/bash
 
-# Usage: ./set_backup_id.sh <file|dir> [unset] [--dry-run]
-
 XATTR_NAME="user.backup_id"
 DRYRUN=0
 
-# Collect new argument list without --dry-run
+show_help() {
+  cat <<EOF
+Usage: $0 <file|dir> [unset] [--dry-run] [--help]
+  <file|dir>      File or directory to operate on.
+  [unset]         Remove backup ID from object instead of setting it.
+  [--dry-run]     Show what would be done, but don't change anything.
+  [--help]        Show this help message.
+EOF
+}
+
+# Parse for --help first
+for arg in "$@"; do
+  if [[ "$arg" == "--help" || "$arg" == "-h" ]]; then
+    show_help
+    exit 0
+  fi
+done
+
+# Parse --dry-run and clean arg list
 NEWARGS=()
 for arg in "$@"; do
   if [[ "$arg" == "--dry-run" ]]; then
@@ -17,9 +33,8 @@ done
 
 set -- "${NEWARGS[@]}"
 
-# Allow only 1 or 2 args (file [unset]), no blanks
 if [[ $# -lt 1 || $# -gt 2 ]]; then
-  echo "Usage: $0 <file|dir> [unset] [--dry-run]"
+  show_help
   exit 1
 fi
 
@@ -28,7 +43,7 @@ OBJ="$1"
 if [[ $# -eq 2 ]]; then
   if [[ "$2" != "unset" ]]; then
     echo "Unknown argument: $2"
-    echo "Usage: $0 <file|dir> [unset] [--dry-run]"
+    show_help
     exit 1
   fi
   if (( DRYRUN )); then

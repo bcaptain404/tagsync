@@ -1,9 +1,25 @@
 #!/bin/bash
 
-# Usage: ./backup.sh <src> <dest> [--dry-run]
-
 XATTR_NAME="user.backup_id"
 DRYRUN=0
+
+show_help() {
+  cat <<EOF
+Usage: $0 <src> <dest> [--dry-run] [--help]
+  <src>         Source directory to back up from.
+  <dest>        Destination directory to back up to.
+  [--dry-run]   Show what would be done, but don't copy anything.
+  [--help]      Show this help message.
+EOF
+}
+
+# --help takes precedence over everything
+for arg in "$@"; do
+  if [[ "$arg" == "--help" || "$arg" == "-h" ]]; then
+    show_help
+    exit 0
+  fi
+done
 
 NEWARGS=()
 for arg in "$@"; do
@@ -17,7 +33,7 @@ done
 set -- "${NEWARGS[@]}"
 
 if [[ $# -ne 2 ]]; then
-  echo "Usage: $0 <src> <dest> [--dry-run]"
+  show_help
   exit 1
 fi
 
