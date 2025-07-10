@@ -50,7 +50,9 @@ find "$ABS_SRC" \( -type f -o -type d \) ! -type l \
         if (( DRYRUN )); then
           echo "[DRY-RUN] Would run: rsync -iauHAXP --no-links --relative \"$OBJ\" \"$ABS_DEST/\""
         else
-          rsync -iauHAXP --no-links --relative "$OBJ" "$ABS_DEST/"
+          if ! rsync -iauHAXP --no-links --relative "$OBJ" "$ABS_DEST/"; then
+            echo "WARNING: rsync failed for $OBJ" >&2
+          fi
         fi
       else
         REL_PATH="${OBJ#$ABS_SRC/}"
@@ -59,8 +61,12 @@ find "$ABS_SRC" \( -type f -o -type d \) ! -type l \
           echo "[DRY-RUN] Would run: mkdir -p \"$(dirname "$DEST_PATH")\""
           echo "[DRY-RUN] Would run: rsync -iauHAXP --no-links --relative \"$OBJ\" \"$ABS_DEST/\""
         else
-          mkdir -p "$(dirname "$DEST_PATH")"
-          rsync -iauHAXP --no-links --relative "$OBJ" "$ABS_DEST/"
+          if ! mkdir -p "$(dirname "$DEST_PATH")"; then
+            echo "WARNING: Failed to create directory $(dirname "$DEST_PATH")" >&2
+          fi
+          if ! rsync -iauHAXP --no-links --relative "$OBJ" "$ABS_DEST/"; then
+            echo "WARNING: rsync failed for $OBJ" >&2
+          fi
         fi
       fi
     fi

@@ -42,20 +42,28 @@ OBJ="$1"
 
 if [[ $# -eq 2 ]]; then
   if [[ "$2" != "unset" ]]; then
-    echo "Unknown argument: $2"
+    echo "Unknown argument: $2" >&2
     show_help
     exit 1
   fi
   if (( DRYRUN )); then
     echo "[DRY-RUN] Would unset $XATTR_NAME from $OBJ"
   else
-    setfattr -x "$XATTR_NAME" "$OBJ" && echo "Unset $XATTR_NAME from $OBJ"
+    if setfattr -x "$XATTR_NAME" "$OBJ"; then
+      echo "Unset $XATTR_NAME from $OBJ"
+    else
+      echo "WARNING: Failed to unset $XATTR_NAME from $OBJ" >&2
+    fi
   fi
 else
   ID=$(uuidgen)
   if (( DRYRUN )); then
     echo "[DRY-RUN] Would set $XATTR_NAME=$ID on $OBJ"
   else
-    setfattr -n "$XATTR_NAME" -v "$ID" "$OBJ" && echo "Set $XATTR_NAME=$ID on $OBJ"
+    if setfattr -n "$XATTR_NAME" -v "$ID" "$OBJ"; then
+      echo "Set $XATTR_NAME=$ID on $OBJ"
+    else
+      echo "WARNING: Failed to set $XATTR_NAME on $OBJ" >&2
+    fi
   fi
 fi
