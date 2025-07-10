@@ -1,4 +1,6 @@
-#!/bin/bash
+#!/usr/bin/env bash
+
+# v0.1.2
 
 XATTR_NAME="user.backup_id"
 FOLLOW=0
@@ -7,39 +9,40 @@ QUIET=0
 
 show_help() {
   cat <<EOF
-Usage: $0 <file|dir> [file|dir] ... [--help] [-F|--follow] [-v|--verbose] [-q|--quiet]
-  <file|dir>      Files, directories, or symlinks to query for backup ID.
-  [--help]        Show this help message.
-  -F, --follow    Query the target of a symlink.
-                  (Default: never follow symlinks, operate on the symlink itself.)
-  -v, --verbose   Show extra details about what is happening.
-  -q, --quiet     Only print warnings or errors.
+TagSync: $0 v0.1.2
+Usage: $0 [OPTIONS] <file|dir|symlink> [<file|dir|symlink>...]
+  -F, --follow     Query the target of symlinks.
+                   (Default: operate on the symlink itself.)
+  -v, --verbose    Show extra details about what is happening.
+  -q, --quiet      Only print warnings or errors.
+  -h, --help       Show this help message.
+  <file|dir|symlink>  One or more objects to query for backup ID.
 EOF
 }
 
-# Print usage if no arguments given
-if [[ $# -eq 0 ]]; then
-  show_help
-  exit 1
-fi
-
-NEWARGS=()
-for arg in "$@"; do
-  case "$arg" in
-    --help|-h) show_help; exit 0 ;;
+PATHS=()
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    -h|--help) show_help; exit 0 ;;
     -F|--follow) FOLLOW=1 ;;
     -v|--verbose) VERBOSE=1 ;;
     -q|--quiet) QUIET=1 ;;
+    --) shift; break ;;
     -*)
-      echo "Unknown argument: $arg"
-      show_help
-      exit 1
+      echo "Unknown argument: $1" >&2
+      show_help; exit 1
       ;;
-    *) NEWARGS+=("$arg") ;;
+    *)
+      PATHS+=("$1")
+      ;;
   esac
+  shift
 done
 
-set -- "${NEWARGS[@]}"
+if [[ ${#PATHS[@]} -eq 0 ]]; then
+  show_help
+  exit 1
+fi
 
 FATTR_FLAG=""
 if (( FOLLOW )); then
@@ -50,7 +53,7 @@ log()   { (( QUIET )) || echo "$@"; }
 vlog()  { (( VERBOSE )) && (( ! QUIET )) && echo "$@"; }
 warn()  { echo "$@" >&2; }
 
-for OBJ in "$@"; do
+for OBJ in "${PATHS[@]}"; do
   if [[ ! -e "$OBJ" && ! -L "$OBJ" ]]; then
     warn "WARNING: File, directory, or symlink not found: $OBJ"
     continue

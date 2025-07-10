@@ -1,46 +1,56 @@
-#!/bin/bash
+#!/usr/bin/env bash
+
+# v0.1.2
 
 XATTR_NAME="user.backup_id"
 DRYRUN=0
 FOLLOW=0
 VERBOSE=0
 QUIET=0
+UNSET=0
 
 show_help() {
   cat <<EOF
-Usage: $0 <file|dir> [unset] [--dry-run] [--help] [-F|--follow] [-v|--verbose] [-q|--quiet]
-  <file|dir>      File, directory, or symlink to operate on.
-  [unset]         Remove backup ID from object instead of setting it.
-  [--dry-run]     Show what would be done, but don't change anything.
-  [--help]        Show this help message.
-  -F, --follow    Operate on the target of a symlink.
-                  (Default: never follow symlinks, operate on the symlink itself.)
-  -v, --verbose   Show extra details about what is happening.
-  -q, --quiet     Only print warnings or errors.
+TagSync: $0 v0.1.2
+Usage: $0 [OPTIONS] <file|dir|symlink> [<file|dir|symlink>...]
+  -u, --unset      Remove backup ID from each object (instead of setting)
+  -F, --follow     Operate on the target of symlinks.
+                   (Default: operate on the symlink itself.)
+  --dry-run        Show what would be done, but don't change anything.
+  -v, --verbose    Show extra details about what is happening.
+  -q, --quiet      Only print warnings or errors.
+  -h, --help       Show this help message.
+  <file|dir|symlink>  One or more objects to operate on.
 EOF
 }
 
-# Parse options and clean arg list
-NEWARGS=()
-for arg in "$@"; do
-  case "$arg" in
-    --help|-h) show_help; exit 0 ;;
+PATHS=()
+# Parse flags/options
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    -h|--help) show_help; exit 0 ;;
     --dry-run) DRYRUN=1 ;;
     -F|--follow) FOLLOW=1 ;;
     -v|--verbose) VERBOSE=1 ;;
     -q|--quiet) QUIET=1 ;;
-    *) NEWARGS+=("$arg") ;;
+    -u|--unset) UNSET=1 ;;
+    --) shift; break ;;
+    -*)
+      echo "Unknown argument: $1" >&2
+      show_help; exit 1
+      ;;
+    *)
+      PATHS+=("$1")
+      ;;
   esac
+  shift
 done
 
-set -- "${NEWARGS[@]}"
-
-if [[ $# -lt 1 || $# -gt 2 ]]; then
+if [[ ${#PATHS[@]} -eq 0 ]]; then
   show_help
   exit 1
 fi
 
-OBJ="$1"
 FATTR_FLAG=""
 if (( FOLLOW )); then
   FATTR_FLAG="-h"
@@ -50,15 +60,13 @@ log()   { (( QUIET )) || echo "$@"; }
 vlog()  { (( VERBOSE )) && (( ! QUIET )) && echo "$@"; }
 warn()  { echo "$@" >&2; }
 
-if [[ ! -e "$OBJ" && ! -L "$OBJ" ]]; then
-  warn "WARNING: File, directory, or symlink not found: $OBJ"
-else
-  if [[ $# -eq 2 ]]; then
-    if [[ "$2" != "unset" ]]; then
-      warn "Unknown argument: $2"
-      show_help
-      exit 1
-    fi
+for OBJ in "${PATHS[@]}"; do
+  if [[ ! -e "$OBJ" && ! -L "$OBJ" ]]; then
+    warn "WARNING: File, directory, or symlink not found: $OBJ"
+    continue
+  fi
+
+  if (( UNSET )); then
     if (( DRYRUN )); then
       log "[DRY-RUN] Would unset $XATTR_NAME from $OBJ"
     else
@@ -80,4 +88,4 @@ else
       fi
     fi
   fi
-fi
+done
