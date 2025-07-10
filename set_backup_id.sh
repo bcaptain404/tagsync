@@ -3,33 +3,32 @@
 XATTR_NAME="user.backup_id"
 DRYRUN=0
 FOLLOW=0
+VERBOSE=0
+QUIET=0
 
 show_help() {
   cat <<EOF
-Usage: $0 <file|dir> [unset] [--dry-run] [--help] [-F|--follow]
+Usage: $0 <file|dir> [unset] [--dry-run] [--help] [-F|--follow] [-v|--verbose] [-q|--quiet]
   <file|dir>      File, directory, or symlink to operate on.
   [unset]         Remove backup ID from object instead of setting it.
   [--dry-run]     Show what would be done, but don't change anything.
   [--help]        Show this help message.
   -F, --follow    Operate on the target of a symlink.
                   (Default: never follow symlinks, operate on the symlink itself.)
+  -v, --verbose   Show extra details about what is happening.
+  -q, --quiet     Only print warnings or errors.
 EOF
 }
 
-# Parse for --help/-h first
-for arg in "$@"; do
-  if [[ "$arg" == "--help" || "$arg" == "-h" ]]; then
-    show_help
-    exit 0
-  fi
-done
-
-# Parse --dry-run and --follow/-F, clean arg list
+# Parse options and clean arg list
 NEWARGS=()
 for arg in "$@"; do
   case "$arg" in
+    --help|-h) show_help; exit 0 ;;
     --dry-run) DRYRUN=1 ;;
     -F|--follow) FOLLOW=1 ;;
+    -v|--verbose) VERBOSE=1 ;;
+    -q|--quiet) QUIET=1 ;;
     *) NEWARGS+=("$arg") ;;
   esac
 done
@@ -47,33 +46,37 @@ if (( FOLLOW )); then
   FATTR_FLAG="-h"
 fi
 
+log()   { (( QUIET )) || echo "$@"; }
+vlog()  { (( VERBOSE )) && (( ! QUIET )) && echo "$@"; }
+warn()  { echo "$@" >&2; }
+
 if [[ ! -e "$OBJ" && ! -L "$OBJ" ]]; then
-  echo "WARNING: File, directory, or symlink not found: $OBJ" >&2
+  warn "WARNING: File, directory, or symlink not found: $OBJ"
 else
   if [[ $# -eq 2 ]]; then
     if [[ "$2" != "unset" ]]; then
-      echo "Unknown argument: $2" >&2
+      warn "Unknown argument: $2"
       show_help
       exit 1
     fi
     if (( DRYRUN )); then
-      echo "[DRY-RUN] Would unset $XATTR_NAME from $OBJ"
+      log "[DRY-RUN] Would unset $XATTR_NAME from $OBJ"
     else
       if setfattr $FATTR_FLAG -x "$XATTR_NAME" "$OBJ"; then
-        echo "Unset $XATTR_NAME from $OBJ"
+        vlog "Unset $XATTR_NAME from $OBJ"
       else
-        echo "WARNING: Failed to unset $XATTR_NAME from $OBJ" >&2
+        warn "WARNING: Failed to unset $XATTR_NAME from $OBJ"
       fi
     fi
   else
     ID=$(uuidgen)
     if (( DRYRUN )); then
-      echo "[DRY-RUN] Would set $XATTR_NAME=$ID on $OBJ"
+      log "[DRY-RUN] Would set $XATTR_NAME=$ID on $OBJ"
     else
       if setfattr $FATTR_FLAG -n "$XATTR_NAME" -v "$ID" "$OBJ"; then
-        echo "Set $XATTR_NAME=$ID on $OBJ"
+        vlog "Set $XATTR_NAME=$ID on $OBJ"
       else
-        echo "WARNING: Failed to set $XATTR_NAME on $OBJ" >&2
+        warn "WARNING: Failed to set $XATTR_NAME on $OBJ"
       fi
     fi
   fi
