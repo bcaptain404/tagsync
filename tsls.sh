@@ -27,6 +27,15 @@ while [[ $# -gt 0 ]]; do
   shift
 done
 
+# If stdout is a terminal and no --color flag present, force color for ls output
+COLORFLAG=0
+for f in "${LS_FLAGS[@]}"; do
+  [[ "$f" == --color* ]] && COLORFLAG=1 && break
+done
+if [[ $COLORFLAG -eq 0 && -t 1 ]]; then
+  LS_FLAGS+=("--color=always")
+fi
+
 if [[ ${#LS_PATHS[@]} -eq 0 ]]; then
   # No files/dirs specified: use '.'
   if getfattr --only-values -n "$XATTR_NAME" "." &>/dev/null; then
