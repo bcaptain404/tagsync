@@ -10,6 +10,8 @@ Usage: $0 <src> <dest> [--dry-run] [--help]
   <dest>        Destination directory to back up to.
   [--dry-run]   Show what would be done, but don't copy anything.
   [--help]      Show this help message.
+
+  Symlinks are never followed or backed up, and will be skipped.
 EOF
 }
 

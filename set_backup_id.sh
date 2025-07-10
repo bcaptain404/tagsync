@@ -11,7 +11,8 @@ Usage: $0 <file|dir> [unset] [--dry-run] [--help] [-F|--follow]
   [unset]         Remove backup ID from object instead of setting it.
   [--dry-run]     Show what would be done, but don't change anything.
   [--help]        Show this help message.
-  -F, --follow    Operate on the target of a symlink (default: operate on the link itself).
+  -F, --follow    Operate on the target of a symlink.
+                  (Default: never follow symlinks, operate on the symlink itself.)
 EOF
 }
 

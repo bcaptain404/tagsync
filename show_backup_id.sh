@@ -8,7 +8,8 @@ show_help() {
 Usage: $0 <file|dir> [file|dir] ... [--help] [-F|--follow]
   <file|dir>      Files, directories, or symlinks to query for backup ID.
   [--help]        Show this help message.
-  -F, --follow    Query the target of a symlink (default: operate on the link itself).
+  -F, --follow    Query the target of a symlink.
+                  (Default: never follow symlinks, operate on the symlink itself.)
 EOF
 }
 
