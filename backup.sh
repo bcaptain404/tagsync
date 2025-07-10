@@ -40,11 +40,21 @@ fi
 SRC="$1"
 DEST="$2"
 
+if [[ ! -d "$SRC" ]]; then
+  echo "WARNING: Source directory not found: $SRC" >&2
+  # Don't exit, just skip backup
+  exit 0
+fi
+
 ABS_SRC=$(realpath "$SRC")
 ABS_DEST=$(realpath "$DEST")
 
 find "$ABS_SRC" \( -type f -o -type d \) ! -type l \
   ! -path "$ABS_DEST" ! -path "$ABS_DEST/*" -print0 | while IFS= read -r -d '' OBJ; do
+    if [[ ! -e "$OBJ" ]]; then
+      echo "WARNING: File or directory not found: $OBJ" >&2
+      continue
+    fi
     if getfattr --only-values -n "$XATTR_NAME" "$OBJ" &>/dev/null; then
       if [[ -d "$OBJ" ]]; then
         if (( DRYRUN )); then

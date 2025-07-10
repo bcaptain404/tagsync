@@ -33,6 +33,10 @@ for OBJ in "$@"; do
 done
 
 for OBJ in "$@"; do
+  if [[ ! -e "$OBJ" ]]; then
+    echo "WARNING: File or directory not found: $OBJ" >&2
+    continue
+  fi
   ID=$(getfattr --only-values -n "$XATTR_NAME" "$OBJ" 2>/dev/null)
   if [[ -n "$ID" ]]; then
     echo "$OBJ: $ID"
