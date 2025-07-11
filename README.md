@@ -1,7 +1,9 @@
-# Project Backup
+# TagSync
 
-**Project Backup** is a Linux-only backup tool that uses extended attributes (`xattrs`) to flag files, directories, or special files ("objects") for backup.  
-Unlike traditional backup tools, Project Backup does not require you to move files to a specific folder or maintain an external list—just tag what you want, and let the tool do the rest.
+** PLEASE NOTE: This software is in pre-alpha
+
+**TagSync** is a Linux-only backup tool that uses extended attributes (`xattrs`) to flag files, directories, or special files ("objects") for backup.  
+Unlike traditional backup tools, TagSync does not require you to move files to a specific folder or maintain an external list—just tag what you want, and let the tool do the rest.
 
 ## Features
 
