@@ -27,6 +27,7 @@ You move an untagged file outside of a tagged dir: poof, gone from the backup.
 - **Per-filesystem design:** IDs only persist on their original filesystem.
 - **Simple CLI tools** to set, unset, and show tags, and to browse for tagged / untagged objects.
 - **Fast:** By default, just compares sizes and timestamps between source and target (paranoid mode is coming soon).
+- **Backup Groups:** Objects can be labelled such that a backup can be run independently (eg, files labelled 'personal', 'work', 'system', etc).
 
 ## Upcoming Features
 - **Incremental Backups**: Keep X number of backups, or Y maximum size, or after Z date - or any combination of the three. Select to store incremental backups as hardlinks inside dated directories (/my/backup/20250731/file.txt), or dated file extensions instead (/my/backup/file.txt.ts-20250731). Optionally toggle between method. Since toggling from one method to another is a mere matter of renaming files/dirs, a toggle operation can be paused and resumed later, even with a backup being run in the interim. All to work as expected (since this is just renames).
