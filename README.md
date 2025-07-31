@@ -43,6 +43,7 @@ You move an untagged file outside of a tagged dir: poof, gone from the backup.
 - **Pause & Resume:** Large file chunks are preserved after paused/canceled runs, as long as source file hasn't changed (based on which smart/paranoid mode is selected)
 - **Revision Control:** optional git for text-based files within the backup target. This will automatically create a new add+commit each time a file is backed up, with no help needed from the user, nor will any .git files be created at the source. (todo: work this into sync as well - prior to over-writing the older file, commit as an alternate branch). The cut-off size for files to be under revision control will be permanently tied to the size at which chunking is allowed (ie, revision control will be unavailable for files that are chunkable)
 - **Synchronize:** A target can be arbitrarily toggled as a sync (two-way) of any number of sources, or as a backup (one-way). When switching to sync, any objects with revision control now become a git remote at the target, and a git clone at the source(s). Syncing will disable chunking and hard-linking (objects at target will be un-chunked and un-hard-linked on subsequent runs), and will delete .git dir of source objects (only if managed by TagSync!).
+- **Compression:** Compressed files over a specified size using a configurable utility (7zip, gzip, etc)
 - **GUI Front-end**
 
 ## Requirements
