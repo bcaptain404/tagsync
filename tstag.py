@@ -12,9 +12,9 @@ debug=False
 def show_help():
     print(f"""tstag.py - Tag a file with a UUID and optional group names.
 Usage:
-  {sys.argv[0]} <file> [-n groupName1,groupName2] [-v]
+  {sys.argv[0]} <file1> [file2 ...] [-n groupName1,groupName2] [-v]
 Options:
-  <file>         File to tag (required)
+  <file>         File(s) to tag (required)
   -n, --names    Comma or semicolon-separated list of group names (optional)
   -v, --verbose  Print more info
       --debug    Print debug info
@@ -35,14 +35,14 @@ def set_tag(file, tag):
         os.setxattr(file, XATTR_NAME, tag.encode())
         return True
     except Exception:
-        print("Failed to set xattr.", file=sys.stderr)
+        print(f"{file}: Failed to set xattr.", file=sys.stderr)
         return False
 
 def parse_args():
     global verbose
     global debug
 
-    file = None
+    files = []
     names = []
 
     args = sys.argv[1:]
@@ -52,7 +52,7 @@ def parse_args():
         if arg in ("-h", "--help"):
             show_help()
             sys.exit(0)
-        elif arg in ("--debug"):
+        elif arg == "--debug":
             debug=True
         elif arg in ("-v", "--verbose"):
             verbose=True
@@ -62,20 +62,20 @@ def parse_args():
                 print("Missing name(s) after -n/--names", file=sys.stderr)
                 sys.exit(1)
             names = [n.strip() for n in args[i].replace(';', ',').split(',') if n.strip()]
-        elif file is None:
-            file = arg
-        else:
+        elif arg.startswith('-'):
             print(f"Unknown argument: {arg}", file=sys.stderr)
             show_help()
             sys.exit(1)
+        else:
+            files.append(arg)
         i += 1
 
-    if not file:
+    if not files:
         show_help()
         sys.exit(1)
-    return file, names
+    return files, names
 
-def AddTag( file, names ):
+def AddTag(file, names):
     old_tag = get_tag(file)
     cur_names=[]
     unique_id=""
@@ -134,12 +134,13 @@ def AddTag( file, names ):
     if new_tag != old_tag:
         tagged = set_tag(file, new_tag)
         if not tagged:
-            sys.exit(3)
-            # todo: print an error instead of bailing
+            # Print an error instead of bailing out
+            print(f"{file}: Error - failed to set tag.", file=sys.stderr)
+            return
     elif verbose:
         print("tag unchanged.")
 
-    print( note )
+    print(note)
 
 def main():
     global verbose
@@ -149,16 +150,14 @@ def main():
         print("Verbose mode.")
     if debug:
         print("Debug mode.")
-    # todo: accept multiple filenames in one call
-    file, names = parse_args()
 
-    if not os.path.exists(file):
-        print(f"File not found: {file}", file=sys.stderr)
-        # todo: continue to next file (if supplied)
-        sys.exit(2)
+    files, names = parse_args()
 
-    AddTag( file, names )
-
+    for file in files:
+        if not os.path.exists(file):
+            print(f"{file}: File not found.", file=sys.stderr)
+            continue  # continue to next file (if supplied)
+        AddTag(file, names)
 
 if __name__ == "__main__":
     main()
