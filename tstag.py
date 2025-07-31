@@ -1,278 +1,164 @@
 #!/usr/bin/env python3
 
-import os
 import sys
+import os
 import uuid
-import subprocess
 
 XATTR_NAME = "user.backup_id"
 
-def show_help():
-    print(f"""TagSync: tstag.py
-Usage: {sys.argv[0]} [options] [-n name[,name2...]]... [-x name[,name2...]]... [-X] [-r] <file> [<file> ...]
-  -n, --name NAMES    Add one or more names to tag (comma or semicolon separated, may repeat).
-  -x NAMES            Remove one or more names from tag (comma or semicolon separated, must provide at least one name).
-  -X                  Remove all names (keep UUID).
-  -r, --remove        Remove tag entirely.
-  -F, --follow        Follow symlinks.
-  --dry-run           Only show what would be done.
-  -v, --verbose       Extra output.
-  -q, --quiet         Only warnings/errors.
-  -h, --help          Show help.
+verbose=False
+debug=False
 
-Examples:
-  tstag.py -n foo,bar file.txt          # Tag file.txt as ts/uuid/foo;bar
-  tstag.py -x foo file.txt              # Remove only 'foo' from tag names
-  tstag.py -X file.txt                  # Remove all names (keep UUID)
-  tstag.py -r file.txt                  # Remove the tag entirely
+def show_help():
+    print(f"""tstag.py - Tag a file with a UUID and optional group names.
+Usage:
+  {sys.argv[0]} <file> [-n groupName1,groupName2] [-v]
+Options:
+  <file>         File to tag (required)
+  -n, --names    Comma or semicolon-separated list of group names (optional)
+  -v, --verbose  Print more info
+      --debug    Print debug info
+  -h, --help     Show this help
 """)
 
-def warn(msg):
-    print(msg, file=sys.stderr)
-
-def log(msg, quiet):
-    if not quiet:
-        print(msg)
-
-def vlog(msg, verbose, quiet):
-    if verbose and not quiet:
-        print(msg)
-
-def get_xattr(path, follow_symlinks):
+def get_tag(file):
     try:
-        if follow_symlinks:
-            return os.getxattr(path, XATTR_NAME).decode()
-        else:
-            raise AttributeError()
-    except Exception:
-        try:
-            res = subprocess.run(
-                ["getfattr"] + (["-h"] if not follow_symlinks else []) + ["--only-values", "-n", XATTR_NAME, path],
-                stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, text=True
-            )
-            return res.stdout.strip() if res.returncode == 0 else ''
-        except Exception:
-            return ''
+        return os.getxattr(file, XATTR_NAME).decode()
+    except OSError as e:
+        # [Errno 61] No data available = xattr not set, so treat as untagged
+        if getattr(e, 'errno', None) == 61:
+            return None
+        return None
 
-def set_xattr(path, name, value, follow_symlinks, dryrun=False):
-    if dryrun:
+def set_tag(file, tag):
+    try:
+        os.setxattr(file, XATTR_NAME, tag.encode())
         return True
-    try:
-        if follow_symlinks:
-            os.setxattr(path, name, value.encode())
-            return True
-        else:
-            raise AttributeError()
     except Exception:
-        try:
-            res = subprocess.run(
-                ["setfattr"] + (["-h"] if not follow_symlinks else []) + ["-n", name, "-v", value, path],
-                stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
-            )
-            return res.returncode == 0
-        except Exception:
-            return False
+        print("Failed to set xattr.", file=sys.stderr)
+        return False
 
-def remove_xattr(path, name, follow_symlinks, dryrun=False):
-    if dryrun:
-        return True
-    try:
-        if follow_symlinks:
-            os.removexattr(path, name)
-            return True
-        else:
-            raise AttributeError()
-    except Exception:
-        try:
-            res = subprocess.run(
-                ["setfattr"] + (["-h"] if not follow_symlinks else []) + ["-x", name, path],
-                stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
-            )
-            return res.returncode == 0
-        except Exception:
-            return False
+def parse_args():
+    global verbose
+    global debug
 
-# --- Argument parser ---
-def ParseArgs(argv):
-    DRYRUN = VERBOSE = QUIET = FOLLOW = REMOVE = REPLACE_ALL = False
-    ADD_NAMES = []
-    REMOVE_NAMES = []
-    files = []
-    args = argv[1:]
+    file = None
+    names = []
+
+    args = sys.argv[1:]
     i = 0
     while i < len(args):
         arg = args[i]
-        if arg in ("-n", "--name"):
-            i += 1
-            if i >= len(args) or args[i].startswith('-'):
-                warn("-n/--name requires an argument")
-                continue
-            ADD_NAMES += [n.strip() for n in args[i].replace(';', ',').split(',') if n.strip()]
-        elif arg == "-x":
-            i += 1
-            if i >= len(args) or args[i].startswith('-'):
-                warn("-x requires at least one name")
-                continue
-            if REPLACE_ALL:
-                warn("-x and -X are mutually exclusive")
-                continue
-            REMOVE_NAMES += [n.strip() for n in args[i].replace(';', ',').split(',') if n.strip()]
-        elif arg == "-X":
-            REPLACE_ALL = True
-            if REMOVE_NAMES:
-                warn("-x and -X are mutually exclusive")
-                sys.exit(1)
-        elif arg in ("-r", "--remove"):
-            REMOVE = True
-        elif arg in ("-F", "--follow"):
-            FOLLOW = True
-        elif arg == "--dry-run":
-            DRYRUN = True
-        elif arg in ("-v", "--verbose"):
-            VERBOSE = True
-        elif arg in ("-q", "--quiet"):
-            QUIET = True
-        elif arg in ("-h", "--help"):
+        if arg in ("-h", "--help"):
             show_help()
             sys.exit(0)
-        elif arg.startswith("-"):
-            warn(f"Unknown option: {arg}")
+        elif arg in ("--debug"):
+            debug=True
+        elif arg in ("-v", "--verbose"):
+            verbose=True
+        elif arg in ("-n", "--names"):
+            i += 1
+            if i >= len(args):
+                print("Missing name(s) after -n/--names", file=sys.stderr)
+                sys.exit(1)
+            names = [n.strip() for n in args[i].replace(';', ',').split(',') if n.strip()]
+        elif file is None:
+            file = arg
+        else:
+            print(f"Unknown argument: {arg}", file=sys.stderr)
             show_help()
             sys.exit(1)
-        else:
-            files = args[i:]
-            break
         i += 1
-    return DRYRUN, VERBOSE, QUIET, FOLLOW, REMOVE, REPLACE_ALL, ADD_NAMES, REMOVE_NAMES, files
 
-# --- Refactor: Remove names from tag ---
-def RemoveNames(obj, cur_names, uuid_part, REMOVE_NAMES, DRYRUN, QUIET, FOLLOW):
-    new_names = [name for name in cur_names if name and name not in REMOVE_NAMES]
-    if new_names:
-        tag = f"ts/{uuid_part}/" + ";".join(new_names)
-    else:
-        tag = f"ts/{uuid_part}"
-    if DRYRUN:
-        log(f"[DRY-RUN] Would tag {obj} as {tag}", QUIET)
-    else:
-        if set_xattr(obj, XATTR_NAME, tag, FOLLOW):
-            log(f"Updated tag for {obj}: {tag}", QUIET)
-        else:
-            warn(f"Failed to update tag for {obj}")
-
-# --- Refactor: Remove all names from tag ---
-def RemoveAllNames(obj, uuid_part, DRYRUN, QUIET, FOLLOW):
-    tag = f"ts/{uuid_part}"
-    if DRYRUN:
-        log(f"[DRY-RUN] Would tag {obj} as {tag}", QUIET)
-    else:
-        if set_xattr(obj, XATTR_NAME, tag, FOLLOW):
-            log(f"Removed all names from {obj} (kept UUID)", QUIET)
-        else:
-            warn(f"Failed to update tag for {obj}")
-
-# --- Refactor: Add names to tag (deduplicated and sorted) ---
-def AddNames(obj, cur_names, uuid_part, ADD_NAMES, DRYRUN, QUIET, FOLLOW):
-    all_names = set(cur_names) | set(ADD_NAMES)
-    all_names = sorted(n for n in all_names if n)
-    tag = f"ts/{uuid_part}"
-    if all_names:
-        tag += "/" + ";".join(all_names)
-    if len(tag) > 250:
-        warn(f"Tag too long for {obj}, skipping")
-        return
-    if DRYRUN:
-        log(f"[DRY-RUN] Would tag {obj} as {tag}", QUIET)
-    else:
-        if set_xattr(obj, XATTR_NAME, tag, FOLLOW):
-            log(f"Tagged {obj} as {tag}", QUIET)
-        else:
-            warn(f"Failed to tag {obj}")
-
-# --- Refactored file processor ---
-def ProcessFiles(DRYRUN, VERBOSE, QUIET, FOLLOW, REMOVE, REPLACE_ALL, ADD_NAMES, REMOVE_NAMES, files):
-    for obj in files:
-        if not os.path.exists(obj) and not os.path.islink(obj):
-            warn(f"Not found: {obj}")
-            continue
-
-        cur_tag = get_xattr(obj, FOLLOW)
-
-        # REMOVE (-r): delete the entire xattr
-        if REMOVE:
-            if not cur_tag:
-                warn(f"{obj}: Not tagged, cannot remove")
-                continue
-            if DRYRUN:
-                log(f"[DRY-RUN] Would remove tag from {obj}", QUIET)
-            else:
-                if remove_xattr(obj, XATTR_NAME, FOLLOW):
-                    log(f"Removed tag from {obj}", QUIET)
-                else:
-                    warn(f"Failed to remove tag from {obj}")
-            continue
-
-        # If not tagged and trying to -x or -X, warn and continue
-        if not cur_tag and (REMOVE_NAMES or REPLACE_ALL):
-            warn(f"{obj}: Not tagged, cannot remove name(s)")
-            continue
-
-        # If not tagged and adding, create a new tag
-        if not cur_tag:
-            new_uuid = str(uuid.uuid4())
-            if ADD_NAMES:
-                new_names = ";".join(ADD_NAMES)
-                tag = f"ts/{new_uuid}/{new_names}"
-            else:
-                tag = f"ts/{new_uuid}"
-            if len(tag) > 250:
-                warn(f"Tag too long for {obj}, skipping")
-                continue
-            if DRYRUN:
-                log(f"[DRY-RUN] Would tag {obj} as {tag}", QUIET)
-            else:
-                if set_xattr(obj, XATTR_NAME, tag, FOLLOW):
-                    log(f"Tagged {obj} as {tag}", QUIET)
-                else:
-                    warn(f"Failed to tag {obj}")
-            continue
-
-        # Parse current tag: always starts with ts/uuid, optionally /name1;name2...
-        try:
-            parts = cur_tag.split('/', 2)
-            uuid_part = parts[1]
-            names_part = parts[2] if len(parts) > 2 else ''
-            cur_names = [n for n in names_part.split(';') if n]
-        except Exception:
-            warn(f"{obj}: Invalid tag format, skipping")
-            continue
-
-        # REMOVE NAMES (-x)
-        if REMOVE_NAMES:
-            RemoveNames(obj, cur_names, uuid_part, REMOVE_NAMES, DRYRUN, QUIET, FOLLOW)
-            continue
-
-        # REMOVE ALL NAMES (-X)
-        if REPLACE_ALL:
-            RemoveAllNames(obj, uuid_part, DRYRUN, QUIET, FOLLOW)
-            continue
-
-        # ADD NAMES
-        if ADD_NAMES:
-            AddNames(obj, cur_names, uuid_part, ADD_NAMES, DRYRUN, QUIET, FOLLOW)
-            continue
-
-        # If none of the above, do nothing (just re-tag as is)
-        vlog(f"No operation specified for {obj}", VERBOSE, QUIET)
-
-def main():
-    DRYRUN, VERBOSE, QUIET, FOLLOW, REMOVE, REPLACE_ALL, ADD_NAMES, REMOVE_NAMES, files = ParseArgs(sys.argv)
-
-    if not files:
+    if not file:
         show_help()
         sys.exit(1)
+    return file, names
 
-    ProcessFiles(DRYRUN, VERBOSE, QUIET, FOLLOW, REMOVE, REPLACE_ALL, ADD_NAMES, REMOVE_NAMES, files)
+def AddTag( file, names ):
+    old_tag = get_tag(file)
+    cur_names=[]
+    unique_id=""
+    uuid_state=""
+    tag_state=""
+
+    if verbose:
+        print( f"current file: {file}" )
+
+    already_tagged = bool(old_tag)
+    if already_tagged:
+        uuid_state="!" # denotes a pre-existing attribute
+        # Parse out any existing group names
+        tag_parts = old_tag.split('/', 2)
+        if len(tag_parts) >= 3:
+            cur_names=[n for n in tag_parts[2].split(';')]
+            if debug:
+                print(f"#tag_parts: {len(tag_parts)}")
+                print(f"#cur_names: {len(cur_names)}: {cur_names}")
+        unique_id=tag_parts[1]
+        if verbose:
+            print( f"already tagged: {unique_id}")
+            print( f"previous tag: {old_tag}")
+    else:
+        uuid_state="+" # denotes a new attribute 
+        unique_id = f"{uuid.uuid4()}" # create the uuid
+        if verbose:
+            print( f"created new id: {unique_id}")
+
+    new_names = [n for n in names if n and n not in cur_names]
+
+    new_tag = "ts/" + unique_id
+    note = f"{file}: ts/{uuid_state}{unique_id}"
+
+    if cur_names or new_names: # add delimiter, all tags will be appended after
+        new_tag += "/"
+        note += "/"
+
+    if cur_names:
+        # add the old names back in
+        new_tag += ";".join(cur_names)
+        note += "!" + ";!".join(cur_names) # exclamation denotes old attribute
+
+    if new_names:
+        if cur_names:
+            # must add semicolon
+            new_tag += ";"
+            note += ";"
+        # now add the new names
+        new_tag += ";".join(new_names)
+        note += "+" + ";+".join(new_names) # plus sign denotes new attribute
+
+    if verbose:
+        print(f"setting tag: {new_tag}")
+
+    if new_tag != old_tag:
+        tagged = set_tag(file, new_tag)
+        if not tagged:
+            sys.exit(3)
+            # todo: print an error instead of bailing
+    elif verbose:
+        print("tag unchanged.")
+
+    print( note )
+
+def main():
+    global verbose
+    global debug
+
+    if verbose:
+        print("Verbose mode.")
+    if debug:
+        print("Debug mode.")
+    # todo: accept multiple filenames in one call
+    file, names = parse_args()
+
+    if not os.path.exists(file):
+        print(f"File not found: {file}", file=sys.stderr)
+        # todo: continue to next file (if supplied)
+        sys.exit(2)
+
+    AddTag( file, names )
+
 
 if __name__ == "__main__":
     main()
