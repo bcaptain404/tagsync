@@ -17,10 +17,12 @@ You move an untagged file outside of a tagged dir: poof, gone from the backup.
 - Low maintenance: simple configuration, clear choices, reversable decisions.
 - Never break: Any Ctrl+C will never leave backups in a confused state.
 - Pause & Resume: Everything can be paused, resumed, and safely interrupted.
+- Small modular utilities instead of monolithic programs.
 
 ## Currently functional:
 - tstag.py: tag and add group names to objects.
 - tsuntag.py: remove tags or group names from objects.
+- tsls.py: list objects tagged for backup. Implemented in terms of `ls`
 
 ## Upcoming Features
 - **Flag any object for backup**: files, directories, special files, etc.
