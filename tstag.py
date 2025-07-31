@@ -43,10 +43,8 @@ def get_xattr(path, follow_symlinks):
         if follow_symlinks:
             return os.getxattr(path, XATTR_NAME).decode()
         else:
-            # Use lgetxattr for symlink, but Python does not expose, so fallback to getfattr
             raise AttributeError()
     except Exception:
-        # fallback to getfattr
         try:
             res = subprocess.run(
                 ["getfattr"] + (["-h"] if not follow_symlinks else []) + ["--only-values", "-n", XATTR_NAME, path],
@@ -66,7 +64,6 @@ def set_xattr(path, name, value, follow_symlinks, dryrun=False):
         else:
             raise AttributeError()
     except Exception:
-        # fallback to setfattr
         try:
             res = subprocess.run(
                 ["setfattr"] + (["-h"] if not follow_symlinks else []) + ["-n", name, "-v", value, path],
@@ -86,7 +83,6 @@ def remove_xattr(path, name, follow_symlinks, dryrun=False):
         else:
             raise AttributeError()
     except Exception:
-        # fallback to setfattr
         try:
             res = subprocess.run(
                 ["setfattr"] + (["-h"] if not follow_symlinks else []) + ["-x", name, path],
@@ -96,7 +92,7 @@ def remove_xattr(path, name, follow_symlinks, dryrun=False):
         except Exception:
             return False
 
-# ----- Refactored argument parser -----
+# --- Argument parser ---
 def ParseArgs(argv):
     DRYRUN = VERBOSE = QUIET = FOLLOW = REMOVE = REPLACE_ALL = False
     ADD_NAMES = []
@@ -149,7 +145,51 @@ def ParseArgs(argv):
         i += 1
     return DRYRUN, VERBOSE, QUIET, FOLLOW, REMOVE, REPLACE_ALL, ADD_NAMES, REMOVE_NAMES, files
 
-# ----- Refactored file processor -----
+# --- Refactor: Remove names from tag ---
+def RemoveNames(obj, cur_names, uuid_part, REMOVE_NAMES, DRYRUN, QUIET, FOLLOW):
+    new_names = [name for name in cur_names if name and name not in REMOVE_NAMES]
+    if new_names:
+        tag = f"ts/{uuid_part}/" + ";".join(new_names)
+    else:
+        tag = f"ts/{uuid_part}"
+    if DRYRUN:
+        log(f"[DRY-RUN] Would tag {obj} as {tag}", QUIET)
+    else:
+        if set_xattr(obj, XATTR_NAME, tag, FOLLOW):
+            log(f"Updated tag for {obj}: {tag}", QUIET)
+        else:
+            warn(f"Failed to update tag for {obj}")
+
+# --- Refactor: Remove all names from tag ---
+def RemoveAllNames(obj, uuid_part, DRYRUN, QUIET, FOLLOW):
+    tag = f"ts/{uuid_part}"
+    if DRYRUN:
+        log(f"[DRY-RUN] Would tag {obj} as {tag}", QUIET)
+    else:
+        if set_xattr(obj, XATTR_NAME, tag, FOLLOW):
+            log(f"Removed all names from {obj} (kept UUID)", QUIET)
+        else:
+            warn(f"Failed to update tag for {obj}")
+
+# --- Refactor: Add names to tag (deduplicated and sorted) ---
+def AddNames(obj, cur_names, uuid_part, ADD_NAMES, DRYRUN, QUIET, FOLLOW):
+    all_names = set(cur_names) | set(ADD_NAMES)
+    all_names = sorted(n for n in all_names if n)
+    tag = f"ts/{uuid_part}"
+    if all_names:
+        tag += "/" + ";".join(all_names)
+    if len(tag) > 250:
+        warn(f"Tag too long for {obj}, skipping")
+        return
+    if DRYRUN:
+        log(f"[DRY-RUN] Would tag {obj} as {tag}", QUIET)
+    else:
+        if set_xattr(obj, XATTR_NAME, tag, FOLLOW):
+            log(f"Tagged {obj} as {tag}", QUIET)
+        else:
+            warn(f"Failed to tag {obj}")
+
+# --- Refactored file processor ---
 def ProcessFiles(DRYRUN, VERBOSE, QUIET, FOLLOW, REMOVE, REPLACE_ALL, ADD_NAMES, REMOVE_NAMES, files):
     for obj in files:
         if not os.path.exists(obj) and not os.path.islink(obj):
@@ -209,66 +249,30 @@ def ProcessFiles(DRYRUN, VERBOSE, QUIET, FOLLOW, REMOVE, REPLACE_ALL, ADD_NAMES,
 
         # REMOVE NAMES (-x)
         if REMOVE_NAMES:
-            new_names = [name for name in cur_names if name and name not in REMOVE_NAMES]
-            if new_names:
-                tag = f"ts/{uuid_part}/" + ";".join(new_names)
-            else:
-                tag = f"ts/{uuid_part}"
-            if DRYRUN:
-                log(f"[DRY-RUN] Would tag {obj} as {tag}", QUIET)
-            else:
-                if set_xattr(obj, XATTR_NAME, tag, FOLLOW):
-                    log(f"Updated tag for {obj}: {tag}", QUIET)
-                else:
-                    warn(f"Failed to update tag for {obj}")
+            RemoveNames(obj, cur_names, uuid_part, REMOVE_NAMES, DRYRUN, QUIET, FOLLOW)
             continue
 
         # REMOVE ALL NAMES (-X)
         if REPLACE_ALL:
-            tag = f"ts/{uuid_part}"
-            if DRYRUN:
-                log(f"[DRY-RUN] Would tag {obj} as {tag}", QUIET)
-            else:
-                if set_xattr(obj, XATTR_NAME, tag, FOLLOW):
-                    log(f"Removed all names from {obj} (kept UUID)", QUIET)
-                else:
-                    warn(f"Failed to update tag for {obj}")
+            RemoveAllNames(obj, uuid_part, DRYRUN, QUIET, FOLLOW)
             continue
 
         # ADD NAMES
         if ADD_NAMES:
-            all_names = set(cur_names) | set(ADD_NAMES)
-            all_names = sorted(n for n in all_names if n)
-            tag = f"ts/{uuid_part}"
-            if all_names:
-                tag += "/" + ";".join(all_names)
-            if len(tag) > 250:
-                warn(f"Tag too long for {obj}, skipping")
-                continue
-            if DRYRUN:
-                log(f"[DRY-RUN] Would tag {obj} as {tag}", QUIET)
-            else:
-                if set_xattr(obj, XATTR_NAME, tag, FOLLOW):
-                    log(f"Tagged {obj} as {tag}", QUIET)
-                else:
-                    warn(f"Failed to tag {obj}")
+            AddNames(obj, cur_names, uuid_part, ADD_NAMES, DRYRUN, QUIET, FOLLOW)
             continue
 
         # If none of the above, do nothing (just re-tag as is)
         vlog(f"No operation specified for {obj}", VERBOSE, QUIET)
 
 def main():
-    # begin refactor as function ParseArgs
     DRYRUN, VERBOSE, QUIET, FOLLOW, REMOVE, REPLACE_ALL, ADD_NAMES, REMOVE_NAMES, files = ParseArgs(sys.argv)
-    # end refactor as function ParseArgs
 
     if not files:
         show_help()
         sys.exit(1)
 
-    # begin refactor as function ProcessFiles
     ProcessFiles(DRYRUN, VERBOSE, QUIET, FOLLOW, REMOVE, REPLACE_ALL, ADD_NAMES, REMOVE_NAMES, files)
-    # end refactor as function ProcessFiles
 
 if __name__ == "__main__":
     main()
