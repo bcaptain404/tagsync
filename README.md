@@ -20,6 +20,7 @@ You move an untagged file outside of a tagged dir: poof, gone from the backup.
 
 ## Currently functional:
 - tstag.py: tag and add group names to objects.
+- tsuntag.py: remove tags or group names from objects.
 
 ## Upcoming Features
 - **Flag any object for backup**: files, directories, special files, etc.
