@@ -2,17 +2,42 @@
 
 ** PLEASE NOTE: This software is in pre-alpha
 
-**TagSync** is a Linux-only backup tool that uses extended attributes (`xattrs`) to flag files, directories, or special files ("objects") for backup.  
-Unlike traditional backup tools, TagSync does not require you to move files to a specific folder or maintain an external list—just tag what you want, and let the tool do the rest.
+TagSync is a "just works" 1-to-1 Linux filesystem backup tool with per-path tracking.
+
+Unlike traditional backup tools, TagSync does not require you to move files to a specific folder or maintain a file list. You just tag/untag what you want, and the tool do the rest.
+
+You tag a file: it gets backed up.
+You move the file: the backup moves it, too.
+You tag a directory: the whole dir gets backed up.
+You move an untagged file outside of a tagged dir: poof, gone from the backup.
+
+## Definitions:
+- source: the place being backed up from.
+- target: the place being backed up to.
+- object: any file or directory select for backup.
+- twin: the object as it exists in the target.
+- run: a backup being performed.
+- id: a per-object unique identifier.
 
 ## Features
+- **Flag any object for backup**: files, directories, special files, etc.
+- **Symlinks are NEVER followed**: no loops, no surprises.
+- **Arbitrary Granulatiy:** Tag individual files, or entire directories.
+- **Path Tracking:** Paths are intelligently preserved on a per-file basis.
+- **Self-exclusion:** A backup being beformed will never traverse into its own target.
+- **Per-filesystem design:** IDs only persist on their original filesystem.
+- **Simple CLI tools** to set, unset, and show tags, and to browse for tagged / untagged objects.
+- **Fast:** By default, just compares sizes and timestamps between source and target (paranoid mode is coming soon).
 
-- **Flag any object for backup** by setting a unique extended attribute (`user.backup_id`).
-- **Backup script copies only flagged objects**, preserving their full directory hierarchy from the source.
-- **Symlinks are never followed** (no loops, no surprises).
-- **Self-exclusion:** The script never backs up its own output directory, even if you try to trick it with relative paths.
-- **Per-filesystem design:** xattr IDs and flags only persist on their original filesystem. Copying or moving files across filesystems creates new objects with new IDs (by design).
-- **Simple CLI tools** to set, unset, and show backup flags.
+## Upcoming Features
+- **Manifesting**: store size, date, path, and timestamps of objects at the backup target.
+- **Path Tracking:** if an object is moved to a different path, this will propagate properly to to target.
+- **Smart Mode:** automatically determine whether md5sums should be compared, on a per-object basis. For example, ISO/disk images will me md5sum'd, but office documents will not. This will use a combination of checking file extensions as well as file headers, depending on certain file aspects (eg, if the file word.doc is 8gb in size, the script will check the header just to make sure that the extnesion isn't lying to us).
+- **Paranoid Mode:** Optionally configurable to always check & manifest md5sums for ALL files always.
+- **Chunking:** Splits large files at target (by a configurable size). An object will then be composed of multiple chunks. For space efficiency, identical chunks of disparate objects are hard-linked at backup target, while retaining each object's unique id. Hard links are created when chunks becomes identical, and properly broken when they diverge.
+- **Pause & Resume:** Large file chunks are preserved after paused/canceled runs, as long as source file hasn't changed (based on which smart/paranoid mode is selected)
+- **Revision Control:** optional git for text-based files within the backup target. This will automatically create a new add+commit each time a file is backed up, with no help needed from the user, nor will any .git files be created at the source. (todo: work this into sync as well - prior to over-writing the older file, commit as an alternate branch). The cut-off size for files to be under revision control will be permanently tied to the size at which chunking is allowed (ie, revision control will be unavailable for files that are chunkable)
+- **Synchronize:** A target can be arbitrarily toggled as a sync (two-way) of any number of sources, or as a backup (one-way). When switching to sync, any objects with revision control now become a git remote at the target, and a git clone at the source(s). Syncing will disable chunking and hard-linking (objects at target will be un-chunked and un-hard-linked on subsequent runs), and will delete .git dir of source objects (only if managed by TagSync!).
 
 ## Requirements
 
