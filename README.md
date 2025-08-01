@@ -6,6 +6,8 @@ TagSync is a "just works" 1-to-1 Linux filesystem backup tool with per-path trac
 
 Unlike traditional backup tools, TagSync does not require you to move files to a specific folder or maintain a file list. You just tag/untag what you want, and the tool do the rest.
 
+A internal manifest of tagged is kept (at ~/.config/tagsync/manifest.json), but only for the sake of improving speed. It can be flushed and rebuilt without issue.
+
 ## Workflow Example:
 You tag a file: it gets backed up.
 You move the file: the backup moves it, too.
@@ -20,13 +22,13 @@ You move an untagged file outside of a tagged dir: poof, gone from the backup.
 - Small modular utilities instead of monolithic programs.
 
 ## Currently functional:
-- tstag.py: tag and add group names to objects.
-- tsuntag.py: remove tags or group names from objects.
+- tstag.py: tag and add group names to objects, and update manifest.
+- tsuntag.py: remove tags or group names from objects, and update manifest
 - tsls.py: list objects tagged for backup. Implemented in terms of `ls`
 - tsinfo.py: show info about tagged file(s).
 
 ## In-Progress scripts:
-- tsmanifest.py: scans paths for tagged files, manifests them to ~/.config/tagsync/manifest.json
+- tsmanifest.py: scans paths for tagged files and manifests them.
 - tsbak.py: runs a backup
 
 ## Feature
