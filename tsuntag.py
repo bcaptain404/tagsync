@@ -141,42 +141,56 @@ def Untag(file, names, nuke_names):
     if verbose:
         print(f"{file}: Old tag: {old_tag}")
 
+    # Handle the three cases:
     if not names and not nuke_names:
-        # No group options: remove the whole attribute if it starts with ts/
-        removed = remove_tag(file)
-        if removed:
-            print(f"{file}: tag removed")
-            # NEW: Remove from manifest
-            update_manifest(file, None, tag_removed=True)
+        _untag_remove_all(file)
         return
 
     unique_id = tag_parts[1] if len(tag_parts) > 1 else ""
     cur_names = tag_parts[2].split(';') if len(tag_parts) > 2 else []
 
     if nuke_names:
-        new_tag = f"ts/{unique_id}"
-        if verbose:
-            print(f"{file}: nuked all names")
-    elif names:
-        # Remove only listed names
-        new_names = [n for n in cur_names if n and n not in names]
-        if not new_names:
-            new_tag = f"ts/{unique_id}"
-        else:
-            new_tag = f"ts/{unique_id}/" + ";".join(new_names)
-        if verbose:
-            removed_names = [n for n in cur_names if n in names]
-            if removed_names:
-                print(f"{file}: removed: {', '.join(removed_names)}")
-            if new_names:
-                print(f"{file}: remaining: {', '.join(new_names)}")
-            else:
-                print(f"{file}: no names remain, only uuid kept")
-    else:
-        # Should never get here
-        print(f"{file}: Internal error", file=sys.stderr)
+        _untag_nuke_names(file, unique_id, old_tag)
         return
 
+    if names:
+        _untag_remove_names(file, names, cur_names, unique_id, old_tag)
+        return
+
+    # Should never get here
+    print(f"{file}: Internal error", file=sys.stderr)
+
+def _untag_remove_all(file):
+    removed = remove_tag(file)
+    if removed:
+        print(f"{file}: tag removed")
+        # NEW: Remove from manifest
+        update_manifest(file, None, tag_removed=True)
+
+def _untag_nuke_names(file, unique_id, old_tag):
+    new_tag = f"ts/{unique_id}"
+    if verbose:
+        print(f"{file}: nuked all names")
+    _commit_tag_change(file, old_tag, new_tag, unique_id)
+
+def _untag_remove_names(file, names, cur_names, unique_id, old_tag):
+    # Remove only listed names
+    new_names = [n for n in cur_names if n and n not in names]
+    if not new_names:
+        new_tag = f"ts/{unique_id}"
+    else:
+        new_tag = f"ts/{unique_id}/" + ";".join(new_names)
+    if verbose:
+        removed_names = [n for n in cur_names if n in names]
+        if removed_names:
+            print(f"{file}: removed: {', '.join(removed_names)}")
+        if new_names:
+            print(f"{file}: remaining: {', '.join(new_names)}")
+        else:
+            print(f"{file}: no names remain, only uuid kept")
+    _commit_tag_change(file, old_tag, new_tag, unique_id)
+
+def _commit_tag_change(file, old_tag, new_tag, unique_id):
     if new_tag == old_tag:
         if verbose:
             print(f"{file}: tag unchanged.")
