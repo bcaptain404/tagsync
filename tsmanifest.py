@@ -65,7 +65,27 @@ def collect_info(obj, tag):
 
 def scan_and_collect(base_path):
     found = {}
+
     for dirpath, dirnames, filenames in os.walk(base_path):
+        # We don't want to manifest a dest dir
+        tagsync_path = os.path.join(dirpath, "tagsync.json")
+        if os.path.isfile(tagsync_path):
+            try:
+                with open(tagsync_path, "r") as f:
+                    data = json.load(f)
+                if data.get("type") == "dest":
+                    print(
+                        f"\n\n*** ERROR: Directory '{dirpath}' is a TagSync backup destination (tagsync.json type='dest'). ***\n"
+                        f"Refusing to scan here. This would be tragic. Exiting.\n",
+                        file=sys.stderr,
+                    )
+                    sys.exit(66)
+            except Exception as e:
+                print(
+                    f"WARNING: Could not read {tagsync_path}: {e} -- continuing anyway.",
+                    file=sys.stderr,
+                )
+        # Continue regular scan
         for entry in filenames + dirnames:
             obj = os.path.join(dirpath, entry)
             tag = get_tag(obj)
