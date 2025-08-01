@@ -25,7 +25,11 @@ You move an untagged file outside of a tagged dir: poof, gone from the backup.
 - tsls.py: list objects tagged for backup. Implemented in terms of `ls`
 - tsinfo.py: show info about tagged file(s).
 
-## Features
+## In-Progress scripts:
+- tsmanifest.py: scans paths for tagged files, manifests them to ~/.config/tagsync/manifest.json
+- tsbak.py: runs a backup
+
+## Feature
 - **Flag any object for backup**: files, directories, special files, etc.
 - **Arbitrary Granulatiy:** Tag individual files, or entire directories.
 - **Per-filesystem design:** IDs only persist on their original filesystem.
