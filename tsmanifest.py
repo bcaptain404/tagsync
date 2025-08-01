@@ -44,25 +44,33 @@ def save_manifest(manifest, filename):
     with open(filename, "w") as f:
         json.dump(manifest, f, indent=2)
 
+def collect_info(obj, tag):
+    """Return stat info dict for the given file if tag is present, else None."""
+    try:
+        st = os.lstat(obj)
+        return {
+            "mtime": int(st.st_mtime),
+            "ctime": int(st.st_ctime),
+            "size": int(st.st_size),
+            "tag": tag,
+        }
+    except Exception as e:
+        print(f"{obj}: Failed to stat: {e}", file=sys.stderr)
+        return None
+
 def scan_and_collect(base_path):
     found = {}
     for dirpath, dirnames, filenames in os.walk(base_path):
         for entry in filenames + dirnames:
             obj = os.path.join(dirpath, entry)
             tag = get_tag(obj)
-            if tag and tag.startswith("ts/"):
-                try:
-                    st = os.lstat(obj)
-                    found[os.path.abspath(obj)] = {
-                        "mtime": int(st.st_mtime),
-                        "ctime": int(st.st_ctime),
-                        "size": int(st.st_size),
-                        "tag": tag,
-                    }
-                    if verbose:
-                        print(f"Found: {obj} (size {st.st_size}, mtime {st.st_mtime}, tag {tag})")
-                except Exception as e:
-                    print(f"{obj}: Failed to stat: {e}", file=sys.stderr)
+            if not (tag and tag.startswith("ts/")):
+                continue
+            info = collect_info(obj, tag)
+            if info:
+                found[os.path.abspath(obj)] = info
+                if verbose:
+                    print(f"Found: {obj} (size {info['size']}, mtime {info['mtime']}, tag {tag})")
     return found
 
 def parse_args():
