@@ -13,9 +13,10 @@ verbose = False
 def show_help():
     print(f"""tsmanifest.py - Scan for TagSync-tagged files/dirs and update manifest.json.
 Usage:
-  {sys.argv[0]} <path> [-v]
+  {sys.argv[0]} [--flush] <path> [-v]
 Options:
   <path>        Directory to scan recursively for tagged files/dirs
+  --flush       Empty out the manifest before scanning/adding
   -v, --verbose Print more info
   -h, --help    Show this help
 """)
@@ -68,25 +69,38 @@ def parse_args():
     global verbose
     args = sys.argv[1:]
     path = None
+    flush = False
     for arg in args:
         if arg in ("-h", "--help"):
             show_help()
             sys.exit(0)
         elif arg in ("-v", "--verbose"):
             verbose = True
+        elif arg == "--flush":
+            flush = True
         elif path is None:
             path = arg
         else:
             print(f"Unknown argument: {arg}", file=sys.stderr)
             show_help()
             sys.exit(1)
+    return flush, (os.path.abspath(path) if path else None)
+
+def main():
+    flush, path = parse_args()
+
+    if flush:
+        # Empty out the manifest first
+        save_manifest({}, MANIFEST)
+        if verbose:
+            print(f"Manifest flushed at {MANIFEST}")
+        # If no path to scan, just exit
+        if not path:
+            return
+
     if not path:
         show_help()
         sys.exit(1)
-    return os.path.abspath(path)
-
-def main():
-    path = parse_args()
     if not os.path.exists(path) or not os.path.isdir(path):
         print(f"Not a directory: {path}", file=sys.stderr)
         sys.exit(1)
