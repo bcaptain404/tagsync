@@ -13,12 +13,12 @@ verbose = False
 def show_help():
     print(f"""tsmanifest.py - Scan for TagSync-tagged files/dirs and update manifest.json.
 Usage:
-  {sys.argv[0]} [--flush] <path> [-v]
+  {sys.argv[0]} [--flush] [--scan DIR] [-v]
 Options:
-  <path>        Directory to scan recursively for tagged files/dirs
-  --flush       Empty out the manifest before scanning/adding
-  -v, --verbose Print more info
-  -h, --help    Show this help
+  --scan DIR     Directory to scan recursively for tagged files/dirs
+  --flush        Empty out the manifest before scanning/adding
+  -v, --verbose  Print more info
+  -h, --help     Show this help
 """)
 
 def get_tag(path):
@@ -75,46 +75,52 @@ def scan_and_collect(base_path):
 
 def parse_args():
     global verbose
-    args = sys.argv[1:]
-    path = None
     flush = False
-    for arg in args:
+    scan_dir = None
+    args = sys.argv[1:]
+    i = 0
+    while i < len(args):
+        arg = args[i]
         if arg in ("-h", "--help"):
             show_help()
             sys.exit(0)
-        elif arg in ("-v", "--verbose"):
-            verbose = True
         elif arg == "--flush":
             flush = True
-        elif path is None:
-            path = arg
+        elif arg in ("-v", "--verbose"):
+            verbose = True
+        elif arg == "--scan":
+            i += 1
+            if i >= len(args):
+                print("--scan requires a directory argument", file=sys.stderr)
+                show_help()
+                sys.exit(1)
+            scan_dir = args[i]
         else:
             print(f"Unknown argument: {arg}", file=sys.stderr)
             show_help()
             sys.exit(1)
-    return flush, (os.path.abspath(path) if path else None)
+        i += 1
+    return flush, scan_dir
 
 def main():
-    flush, path = parse_args()
+    flush, scan_dir = parse_args()
 
     if flush:
-        # Empty out the manifest first
         save_manifest({}, MANIFEST)
         if verbose:
             print(f"Manifest flushed at {MANIFEST}")
-        # If no path to scan, just exit
-        if not path:
+        if not scan_dir:
             return
 
-    if not path:
+    if not scan_dir:
         show_help()
         sys.exit(1)
-    if not os.path.exists(path) or not os.path.isdir(path):
-        print(f"Not a directory: {path}", file=sys.stderr)
+    if not os.path.exists(scan_dir) or not os.path.isdir(scan_dir):
+        print(f"Not a directory: {scan_dir}", file=sys.stderr)
         sys.exit(1)
 
     manifest = load_manifest(MANIFEST)
-    collected = scan_and_collect(path)
+    collected = scan_and_collect(scan_dir)
     manifest.update(collected)
     save_manifest(manifest, MANIFEST)
     if verbose:
