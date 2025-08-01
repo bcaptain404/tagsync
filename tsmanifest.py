@@ -3,6 +3,7 @@
 import sys
 import os
 import json
+import datetime
 
 XATTR_NAME = "user.backup_id"
 CONFIG_DIR = os.path.expanduser("~/.config/tagsync")
@@ -13,9 +14,10 @@ verbose = False
 def show_help():
     print(f"""tsmanifest.py - Scan for TagSync-tagged files/dirs and update manifest.json.
 Usage:
-  {sys.argv[0]} [--flush] [--scan DIR ...] [-v]
+  {sys.argv[0]} [--flush] [--scan DIR ...] [--update] [-v]
 Options:
   --scan DIR ...  One or more directories to scan recursively for tagged files/dirs
+  --update        Update manifest entries for all recorded files
   --flush         Empty out the manifest before scanning/adding
   -v, --verbose   Print more info
   -h, --help      Show this help
@@ -73,10 +75,39 @@ def scan_and_collect(base_path):
                     print(f"Found: {obj} (size {info['size']}, mtime {info['mtime']}, tag {tag})")
     return found
 
+def update_manifest_entries(manifest):
+    changed = False
+    now = datetime.datetime.now().isoformat()
+    for abspath, entry in manifest.items():
+        if os.path.exists(abspath):
+            try:
+                st = os.lstat(abspath)
+                tag = get_tag(abspath)
+                entry["mtime"] = int(st.st_mtime)
+                entry["ctime"] = int(st.st_ctime)
+                entry["size"] = int(st.st_size)
+                entry["tag"] = tag
+                entry["date_updated"] = now
+                if "date_missing" in entry:
+                    del entry["date_missing"]
+                if verbose:
+                    print(f"{abspath}: Updated entry.")
+                changed = True
+            except Exception as e:
+                print(f"{abspath}: Failed to update entry: {e}", file=sys.stderr)
+        else:
+            if "date_missing" not in entry:
+                entry["date_missing"] = now
+                if verbose:
+                    print(f"{abspath}: File missing, date_missing set.")
+                changed = True
+    return changed
+
 def parse_args():
     global verbose
     flush = False
     scan_dirs = []
+    update_manifest_flag = False
     args = sys.argv[1:]
     i = 0
     while i < len(args):
@@ -100,40 +131,53 @@ def parse_args():
             while i < len(args) and not args[i].startswith("-"):
                 scan_dirs.append(args[i])
                 i += 1
+        elif arg == "--update":
+            update_manifest_flag = True
+            i += 1
         else:
             print(f"Unknown argument: {arg}", file=sys.stderr)
             show_help()
             sys.exit(1)
-    return flush, scan_dirs
+    return flush, scan_dirs, update_manifest_flag
 
 def main():
-    flush, scan_dirs = parse_args()
+    flush, scan_dirs, update_manifest_flag = parse_args()
 
     if flush:
         save_manifest({}, MANIFEST)
         if verbose:
             print(f"Manifest flushed at {MANIFEST}")
-        if not scan_dirs:
+        # If --flush only, exit
+        if not scan_dirs and not update_manifest_flag:
             return
 
-    if not scan_dirs:
-        show_help()
-        sys.exit(1)
-
-    for scan_dir in scan_dirs:
-        if not os.path.exists(scan_dir) or not os.path.isdir(scan_dir):
-            print(f"Not a directory: {scan_dir}", file=sys.stderr)
-            sys.exit(1)
-
     manifest = load_manifest(MANIFEST)
-    total_collected = 0
-    for scan_dir in scan_dirs:
-        collected = scan_and_collect(scan_dir)
-        manifest.update(collected)
-        total_collected += len(collected)
-    save_manifest(manifest, MANIFEST)
-    if verbose:
-        print(f"Wrote manifest for {total_collected} objects (total {len(manifest)}) to {MANIFEST}")
+    now = datetime.datetime.now().isoformat()
+
+    if scan_dirs:
+        for scan_dir in scan_dirs:
+            if not os.path.exists(scan_dir) or not os.path.isdir(scan_dir):
+                print(f"Not a directory: {scan_dir}", file=sys.stderr)
+                sys.exit(1)
+        total_collected = 0
+        for scan_dir in scan_dirs:
+            collected = scan_and_collect(scan_dir)
+            for abspath, info in collected.items():
+                # Check if file is new to manifest
+                if abspath not in manifest:
+                    info["date_added"] = now
+                info["date_updated"] = now
+                manifest[abspath] = info
+            total_collected += len(collected)
+        save_manifest(manifest, MANIFEST)
+        if verbose:
+            print(f"Wrote manifest for {total_collected} objects (total {len(manifest)}) to {MANIFEST}")
+
+    if update_manifest_flag:
+        changed = update_manifest_entries(manifest)
+        save_manifest(manifest, MANIFEST)
+        if verbose:
+            print(f"Manifest updated for existing files.")
 
 if __name__ == "__main__":
     main()
