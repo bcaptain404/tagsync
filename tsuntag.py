@@ -2,8 +2,11 @@
 
 import sys
 import os
+import json
 
 XATTR_NAME = "user.backup_id"
+CONFIG_DIR = os.path.expanduser("~/.config/tagsync")
+MANIFEST = os.path.join(CONFIG_DIR, "manifest.json")
 
 verbose = False
 debug = False
@@ -44,6 +47,43 @@ def remove_tag(file):
     except Exception:
         print(f"{file}: Failed to remove tag.", file=sys.stderr)
         return False
+
+# NEW: update manifest entry after tag change/removal
+def update_manifest(file, tag, tag_removed=False):
+    try:
+        os.makedirs(CONFIG_DIR, exist_ok=True)
+        if os.path.exists(MANIFEST):
+            with open(MANIFEST, "r") as f:
+                manifest = json.load(f)
+        else:
+            manifest = {}
+    except Exception:
+        manifest = {}
+    abs_path = os.path.abspath(file)
+    if tag_removed or not tag:
+        if abs_path in manifest:
+            del manifest[abs_path]
+            if verbose:
+                print(f"{file}: Removed from manifest.")
+    else:
+        try:
+            st = os.lstat(file)
+            entry = {
+                "mtime": int(st.st_mtime),
+                "ctime": int(st.st_ctime),
+                "size": int(st.st_size),
+                "tag": tag,
+            }
+            manifest[abs_path] = entry
+            if verbose:
+                print(f"{file}: Manifest updated.")
+        except Exception as e:
+            print(f"{file}: Failed to update manifest: {e}", file=sys.stderr)
+    try:
+        with open(MANIFEST, "w") as f:
+            json.dump(manifest, f, indent=2)
+    except Exception as e:
+        print(f"{file}: Failed to write manifest: {e}", file=sys.stderr)
 
 def parse_args():
     global verbose
@@ -93,6 +133,8 @@ def Untag(file, names, nuke_names):
     if not old_tag or not old_tag.startswith("ts/"):
         if verbose:
             print(f"{file}: No ts/ tag found.")
+        # NEW: Remove from manifest if it exists, just in case
+        update_manifest(file, None, tag_removed=True)
         return
 
     tag_parts = old_tag.split('/', 2)
@@ -104,6 +146,8 @@ def Untag(file, names, nuke_names):
         removed = remove_tag(file)
         if removed:
             print(f"{file}: tag removed")
+            # NEW: Remove from manifest
+            update_manifest(file, None, tag_removed=True)
         return
 
     unique_id = tag_parts[1] if len(tag_parts) > 1 else ""
@@ -140,6 +184,11 @@ def Untag(file, names, nuke_names):
         tagged = set_tag(file, new_tag)
         if tagged:
             print(f"{file}: tag updated")
+            # NEW: Update manifest (remove if no group names left)
+            if new_tag == f"ts/{unique_id}":
+                update_manifest(file, None, tag_removed=True)
+            else:
+                update_manifest(file, new_tag, tag_removed=False)
 
 def main():
     global verbose
@@ -155,6 +204,8 @@ def main():
     for file in files:
         if not os.path.exists(file):
             print(f"{file}: File not found.", file=sys.stderr)
+            # NEW: Remove from manifest if present
+            update_manifest(file, None, tag_removed=True)
             continue
         Untag(file, names, nuke_names)
 
