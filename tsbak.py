@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+#!/usr/bin/env python3.12
 
 import sys
 import os
@@ -161,6 +161,8 @@ def parse_args(argv):
 
 def main():
     groups, DRYRUN, VERBOSE, QUIET, FOLLOW = parse_args(sys.argv)
+    if not groups:
+        show_help()
     for names, paths in groups:
         src_list, dest = validate_input(paths)
         if not src_list:
