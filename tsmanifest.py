@@ -13,12 +13,12 @@ verbose = False
 def show_help():
     print(f"""tsmanifest.py - Scan for TagSync-tagged files/dirs and update manifest.json.
 Usage:
-  {sys.argv[0]} [--flush] [--scan DIR] [-v]
+  {sys.argv[0]} [--flush] [--scan DIR ...] [-v]
 Options:
-  --scan DIR     Directory to scan recursively for tagged files/dirs
-  --flush        Empty out the manifest before scanning/adding
-  -v, --verbose  Print more info
-  -h, --help     Show this help
+  --scan DIR ...  One or more directories to scan recursively for tagged files/dirs
+  --flush         Empty out the manifest before scanning/adding
+  -v, --verbose   Print more info
+  -h, --help      Show this help
 """)
 
 def get_tag(path):
@@ -76,7 +76,7 @@ def scan_and_collect(base_path):
 def parse_args():
     global verbose
     flush = False
-    scan_dir = None
+    scan_dirs = []
     args = sys.argv[1:]
     i = 0
     while i < len(args):
@@ -86,45 +86,54 @@ def parse_args():
             sys.exit(0)
         elif arg == "--flush":
             flush = True
+            i += 1
         elif arg in ("-v", "--verbose"):
             verbose = True
+            i += 1
         elif arg == "--scan":
             i += 1
             if i >= len(args):
-                print("--scan requires a directory argument", file=sys.stderr)
+                print("--scan requires at least one directory", file=sys.stderr)
                 show_help()
                 sys.exit(1)
-            scan_dir = args[i]
+            # All subsequent args (until next flag or end) are directories to scan
+            while i < len(args) and not args[i].startswith("-"):
+                scan_dirs.append(args[i])
+                i += 1
         else:
             print(f"Unknown argument: {arg}", file=sys.stderr)
             show_help()
             sys.exit(1)
-        i += 1
-    return flush, scan_dir
+    return flush, scan_dirs
 
 def main():
-    flush, scan_dir = parse_args()
+    flush, scan_dirs = parse_args()
 
     if flush:
         save_manifest({}, MANIFEST)
         if verbose:
             print(f"Manifest flushed at {MANIFEST}")
-        if not scan_dir:
+        if not scan_dirs:
             return
 
-    if not scan_dir:
+    if not scan_dirs:
         show_help()
         sys.exit(1)
-    if not os.path.exists(scan_dir) or not os.path.isdir(scan_dir):
-        print(f"Not a directory: {scan_dir}", file=sys.stderr)
-        sys.exit(1)
+
+    for scan_dir in scan_dirs:
+        if not os.path.exists(scan_dir) or not os.path.isdir(scan_dir):
+            print(f"Not a directory: {scan_dir}", file=sys.stderr)
+            sys.exit(1)
 
     manifest = load_manifest(MANIFEST)
-    collected = scan_and_collect(scan_dir)
-    manifest.update(collected)
+    total_collected = 0
+    for scan_dir in scan_dirs:
+        collected = scan_and_collect(scan_dir)
+        manifest.update(collected)
+        total_collected += len(collected)
     save_manifest(manifest, MANIFEST)
     if verbose:
-        print(f"Wrote manifest for {len(collected)} objects (total {len(manifest)}) to {MANIFEST}")
+        print(f"Wrote manifest for {total_collected} objects (total {len(manifest)}) to {MANIFEST}")
 
 if __name__ == "__main__":
     main()
