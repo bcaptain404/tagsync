@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+#!/usr/bin/env python3.12
 
 import sys
 import os
@@ -140,38 +140,45 @@ def parse_args():
             sys.exit(1)
     return flush, scan_dirs, update_manifest_flag
 
+def flush_manifest():
+    save_manifest({}, MANIFEST)
+    if verbose:
+        print(f"Manifest flushed at {MANIFEST}")
+
+def validate_scan_dirs(scan_dirs):
+    for scan_dir in scan_dirs:
+        if not os.path.exists(scan_dir) or not os.path.isdir(scan_dir):
+            print(f"Not a directory: {scan_dir}", file=sys.stderr)
+            sys.exit(1)
+
+def scan_and_update_manifest(manifest, scan_dirs):
+    now = datetime.datetime.now().isoformat()
+    total_collected = 0
+    for scan_dir in scan_dirs:
+        collected = scan_and_collect(scan_dir)
+        for abspath, info in collected.items():
+            if abspath not in manifest:
+                info["date_added"] = now
+            info["date_updated"] = now
+            manifest[abspath] = info
+        total_collected += len(collected)
+    save_manifest(manifest, MANIFEST)
+    if verbose:
+        print(f"Wrote manifest for {total_collected} objects (total {len(manifest)}) to {MANIFEST}")
+
 def main():
     flush, scan_dirs, update_manifest_flag = parse_args()
 
     if flush:
-        save_manifest({}, MANIFEST)
-        if verbose:
-            print(f"Manifest flushed at {MANIFEST}")
-        # If --flush only, exit
+        flush_manifest()
         if not scan_dirs and not update_manifest_flag:
             return
 
     manifest = load_manifest(MANIFEST)
-    now = datetime.datetime.now().isoformat()
 
     if scan_dirs:
-        for scan_dir in scan_dirs:
-            if not os.path.exists(scan_dir) or not os.path.isdir(scan_dir):
-                print(f"Not a directory: {scan_dir}", file=sys.stderr)
-                sys.exit(1)
-        total_collected = 0
-        for scan_dir in scan_dirs:
-            collected = scan_and_collect(scan_dir)
-            for abspath, info in collected.items():
-                # Check if file is new to manifest
-                if abspath not in manifest:
-                    info["date_added"] = now
-                info["date_updated"] = now
-                manifest[abspath] = info
-            total_collected += len(collected)
-        save_manifest(manifest, MANIFEST)
-        if verbose:
-            print(f"Wrote manifest for {total_collected} objects (total {len(manifest)}) to {MANIFEST}")
+        validate_scan_dirs(scan_dirs)
+        scan_and_update_manifest(manifest, scan_dirs)
 
     if update_manifest_flag:
         changed = update_manifest_entries(manifest)
@@ -181,3 +188,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+
