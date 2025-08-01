@@ -12,15 +12,18 @@ MANIFEST = os.path.join(CONFIG_DIR, "manifest.json")
 verbose = False
 
 def show_help():
-    print(f"""tsmanifest.py - Scan for TagSync-tagged files/dirs and update manifest.json.
+    print(f"""tsmanifest.py - TagSync manifest manager
+
 Usage:
-  {sys.argv[0]} [--flush] [--scan DIR ...] [--update] [-v]
+  {sys.argv[0]} [--flush] [--scan DIR ...] [--update] [--rebuild DIR ...] [-v]
+
 Options:
-  --scan DIR ...  One or more directories to scan recursively for tagged files/dirs
-  --update        Update manifest entries for all recorded files
-  --flush         Empty out the manifest before scanning/adding
-  -v, --verbose   Print more info
-  -h, --help      Show this help
+  --flush             Empty out the manifest before scanning/adding
+  --scan DIR ...      One or more directories to scan recursively for tagged files/dirs and add/update manifest entries
+  --update            Update manifest entries for all recorded files (refresh info and set 'date_missing' if not found)
+  --rebuild DIR ...   Attempt to find/re-link files with 'date_missing' in manifest by searching these dirs for matching tags
+  -v, --verbose       Print more info
+  -h, --help          Show this help
 """)
 
 def get_tag(path):
