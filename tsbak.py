@@ -55,47 +55,35 @@ def find_tagged_files(src, names=None, follow=False):
             if os.path.islink(fullpath):
                 continue
             tag = get_xattr(fullpath)
-            if tag and tag.startswith('ts/'):
-                if not names:
-                    tagged.append(fullpath)
-                else:
-                    tag_names = tag.split('/', 2)[-1].split(';') if '/' in tag[3:] else []
-                    for name in names:
-                        if name in tag_names:
-                            tagged.append(fullpath)
-                            break
+            if not (tag and tag.startswith('ts/')):
+                continue
+            if not names:
+                tagged.append(fullpath)
+                continue
+            tag_names = tag.split('/', 2)[-1].split(';') if '/' in tag[3:] else []
+            if any(name in tag_names for name in names):
+                tagged.append(fullpath)
     return tagged
 
 def backup_object(obj, abs_src, abs_dest, dry_run, verbose, quiet):
-    if os.path.isdir(obj) and not os.path.islink(obj):
-        if dry_run:
-            log(f"[DRY-RUN] Would rsync -iauHAX --no-links --relative '{obj}' '{abs_dest}/'", quiet)
-        else:
-            result = subprocess.run([
-                "rsync", "-iauHAX", "--no-links", "--relative", obj, abs_dest + "/"
-            ])
-            if result.returncode != 0:
-                warn(f"rsync failed for {obj}")
-            else:
-                log(f"Backed up directory: {obj}", quiet)
+    rel_path = os.path.relpath(obj, abs_src)
+    dest_path = os.path.join(abs_dest, rel_path)
+    if dry_run:
+        log(f"[DRY-RUN] Would mkdir -p '{os.path.dirname(dest_path)}'", quiet)
+        log(f"[DRY-RUN] Would rsync -iauHAX --no-links --relative '{obj}' '{abs_dest}/'", quiet)
+        return
+    if not os.path.isdir(obj) or os.path.islink(obj):
+        try:
+            os.makedirs(os.path.dirname(dest_path), exist_ok=True)
+        except Exception:
+            warn(f"Failed to create directory for {dest_path}")
+    result = subprocess.run([
+        "rsync", "-iauHAX", "--no-links", "--relative", obj, abs_dest + "/"
+    ])
+    if result.returncode != 0:
+        warn(f"rsync failed for {obj}")
     else:
-        rel_path = os.path.relpath(obj, abs_src)
-        dest_path = os.path.join(abs_dest, rel_path)
-        if dry_run:
-            log(f"[DRY-RUN] Would mkdir -p '{os.path.dirname(dest_path)}'", quiet)
-            log(f"[DRY-RUN] Would rsync -iauHAX --no-links --relative '{obj}' '{abs_dest}/'", quiet)
-        else:
-            try:
-                os.makedirs(os.path.dirname(dest_path), exist_ok=True)
-            except Exception:
-                warn(f"Failed to create directory for {dest_path}")
-            result = subprocess.run([
-                "rsync", "-iauHAX", "--no-links", "--relative", obj, abs_dest + "/"
-            ])
-            if result.returncode != 0:
-                warn(f"rsync failed for {obj}")
-            else:
-                log(f"Backed up file: {obj}", quiet)
+        log(f"Backed up {'directory' if os.path.isdir(obj) else 'file'}: {obj}", quiet)
 
 def backup(src_list, dest, names=None, dry_run=False, verbose=False, quiet=False, follow=False):
     abs_dest = os.path.abspath(dest)
