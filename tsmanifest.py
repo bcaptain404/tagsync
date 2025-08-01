@@ -5,7 +5,8 @@ import os
 import json
 
 XATTR_NAME = "user.backup_id"
-MANIFEST = "manifest.json"
+CONFIG_DIR = os.path.expanduser("~/.config/tagsync")
+MANIFEST = os.path.join(CONFIG_DIR, "manifest.json")
 
 verbose = False
 
@@ -38,6 +39,7 @@ def load_manifest(filename):
         return {}
 
 def save_manifest(manifest, filename):
+    os.makedirs(os.path.dirname(filename), exist_ok=True)
     with open(filename, "w") as f:
         json.dump(manifest, f, indent=2)
 
