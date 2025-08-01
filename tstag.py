@@ -3,8 +3,11 @@
 import sys
 import os
 import uuid
+import json
 
 XATTR_NAME = "user.backup_id"
+CONFIG_DIR = os.path.expanduser("~/.config/tagsync")
+MANIFEST = os.path.join(CONFIG_DIR, "manifest.json")
 
 verbose=False
 debug=False
@@ -37,6 +40,33 @@ def set_tag(file, tag):
     except Exception:
         print(f"{file}: Failed to set xattr.", file=sys.stderr)
         return False
+
+def update_manifest(file, tag):
+    try:
+        os.makedirs(CONFIG_DIR, exist_ok=True)
+        if os.path.exists(MANIFEST):
+            with open(MANIFEST, "r") as f:
+                manifest = json.load(f)
+        else:
+            manifest = {}
+    except Exception:
+        manifest = {}
+    # Get file stat info
+    try:
+        st = os.lstat(file)
+        entry = {
+            "mtime": int(st.st_mtime),
+            "ctime": int(st.st_ctime),
+            "size": int(st.st_size),
+            "tag": tag,
+        }
+        manifest[os.path.abspath(file)] = entry
+        with open(MANIFEST, "w") as f:
+            json.dump(manifest, f, indent=2)
+        if verbose:
+            print(f"{file}: Manifest updated.")
+    except Exception as e:
+        print(f"{file}: Failed to update manifest: {e}", file=sys.stderr)
 
 def parse_args():
     global verbose
@@ -137,6 +167,7 @@ def AddTag(file, names):
             # Print an error instead of bailing out
             print(f"{file}: Error - failed to set tag.", file=sys.stderr)
             return
+        update_manifest(file, new_tag)
     elif verbose:
         print("tag unchanged.")
 
