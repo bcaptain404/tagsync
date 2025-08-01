@@ -63,39 +63,43 @@ def collect_info(obj, tag):
         print(f"{obj}: Failed to stat: {e}", file=sys.stderr)
         return None
 
-def scan_and_collect(base_path):
-    found = {}
-
-    for dirpath, dirnames, filenames in os.walk(base_path):
-        # We don't want to manifest a dest dir
-        tagsync_path = os.path.join(dirpath, "tagsync.json")
-        if os.path.isfile(tagsync_path):
-            try:
-                with open(tagsync_path, "r") as f:
-                    data = json.load(f)
-                if data.get("type") == "dest":
-                    print(
-                        f"\n\n*** ERROR: Directory '{dirpath}' is a TagSync backup destination (tagsync.json type='dest'). ***\n"
-                        f"Refusing to scan here. This would be tragic. Exiting.\n",
-                        file=sys.stderr,
-                    )
-                    sys.exit(66)
-            except Exception as e:
+def is_tagsync_dest_dir(dirpath):
+    tagsync_path = os.path.join(dirpath, "tagsync.json")
+    if os.path.isfile(tagsync_path):
+        try:
+            with open(tagsync_path, "r") as f:
+                data = json.load(f)
+            if data.get("type") == "dest":
                 print(
-                    f"WARNING: Could not read {tagsync_path}: {e} -- continuing anyway.",
+                    f"\n\n*** ERROR: Directory '{dirpath}' is a TagSync backup destination (tagsync.json type='dest'). ***\n"
+                    f"Refusing to scan here. This would be tragic. Exiting.\n",
                     file=sys.stderr,
                 )
-        # Continue regular scan
-        for entry in filenames + dirnames:
-            obj = os.path.join(dirpath, entry)
-            tag = get_tag(obj)
-            if not (tag and tag.startswith("ts/")):
-                continue
+                sys.exit(66)
+        except Exception as e:
+            print(
+                f"WARNING: Could not read {tagsync_path}: {e} -- continuing anyway.",
+                file=sys.stderr,
+            )
+
+def collect_tagged_objects(dirpath, entries):
+    found = {}
+    for entry in entries:
+        obj = os.path.join(dirpath, entry)
+        tag = get_tag(obj)
+        if tag and tag.startswith("ts/"):
             info = collect_info(obj, tag)
             if info:
                 found[os.path.abspath(obj)] = info
                 if verbose:
                     print(f"Found: {obj} (size {info['size']}, mtime {info['mtime']}, tag {tag})")
+    return found
+
+def scan_and_collect(base_path):
+    found = {}
+    for dirpath, dirnames, filenames in os.walk(base_path):
+        is_tagsync_dest_dir(dirpath)
+        found.update(collect_tagged_objects(dirpath, filenames + dirnames))
     return found
 
 def update_manifest_entries(manifest):
