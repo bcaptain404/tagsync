@@ -167,6 +167,9 @@ def scan_and_update_manifest(manifest, scan_dirs):
         print(f"Wrote manifest for {total_collected} objects (total {len(manifest)}) to {MANIFEST}")
 
 def main():
+    if len(sys.argv) == 1:
+        show_help()
+        sys.exit(0)
     flush, scan_dirs, update_manifest_flag = parse_args()
 
     if flush:
