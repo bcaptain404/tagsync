@@ -3,6 +3,16 @@
 import sys
 import os
 import subprocess
+import json
+
+def write_tagsync_metadata(dest):
+    path = os.path.join(os.path.abspath(dest), "tagsync.json")
+    data = {"type": "dest"}
+    try:
+        with open(path, "w") as f:
+            json.dump(data, f, indent=2)
+    except Exception as e:
+        print(f"Failed to write tagsync.json: {e}", file=sys.stderr)
 
 XATTR_NAME = "user.backup_id"
 
@@ -87,6 +97,7 @@ def backup_object(obj, abs_src, abs_dest, dry_run, verbose, quiet):
 
 def backup(src_list, dest, names=None, dry_run=False, verbose=False, quiet=False, follow=False):
     abs_dest = os.path.abspath(dest)
+    write_tagsync_metadata(abs_dest)
     for src in src_list:
         if not os.path.isdir(src):
             warn(f"Source {src} is not a directory or not found. Skipping.")
