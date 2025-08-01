@@ -152,52 +152,80 @@ def parse_args():
             sys.exit(1)
     return flush, scan_dirs, update_manifest_flag, rebuild_dirs
 
-def rebuild_missing_files(manifest, rebuild_dirs):
-    # Build a list of manifest keys that are missing
-    missing = [(abspath, entry) for abspath, entry in manifest.items() if "date_missing" in entry]
-    if not missing:
-        print("No missing files found in manifest. Run --update first to mark missing files.")
-        return
+def get_missing_manifest_entries(manifest):
+    """Return a list of (abspath, entry) for manifest items with date_missing set."""
+    return [(abspath, entry) for abspath, entry in manifest.items() if "date_missing" in entry]
 
-    # Map unique_id to manifest key
+def build_uuid_lookup(missing_entries):
+    """Return a dict mapping uuid -> (abspath, entry) for all missing manifest entries."""
     uuid_to_manifestkey = {}
-    for abspath, entry in missing:
+    for abspath, entry in missing_entries:
         tag = entry.get("tag", "")
         if tag and tag.startswith("ts/"):
-            uuid = tag.split("/", 2)[1]  # ts/<uuid> or ts/<uuid>/names
+            uuid = tag.split("/", 2)[1]
             uuid_to_manifestkey[uuid] = (abspath, entry)
+    return uuid_to_manifestkey
 
-    # Walk all files under rebuild_dirs, looking for files with tags matching missing uuids
-    found_count = 0
-    for dir in rebuild_dirs:
-        for dirpath, dirnames, filenames in os.walk(dir):
+def find_tagged_files_by_uuid(search_dirs, uuids):
+    """Return dict of uuid -> found_path for any file in search_dirs with a tag matching uuids."""
+    found = {}
+    for search_dir in search_dirs:
+        for dirpath, dirnames, filenames in os.walk(search_dir):
             for name in filenames + dirnames:
                 path = os.path.join(dirpath, name)
                 tag = get_tag(path)
                 if tag and tag.startswith("ts/"):
                     uuid = tag.split("/", 2)[1]
-                    if uuid in uuid_to_manifestkey:
-                        abspath, entry = uuid_to_manifestkey[uuid]
-                        st = os.lstat(path)
-                        entry["mtime"] = int(st.st_mtime)
-                        entry["ctime"] = int(st.st_ctime)
-                        entry["size"] = int(st.st_size)
-                        entry["tag"] = tag
-                        entry["date_updated"] = datetime.datetime.now().isoformat()
-                        entry.pop("date_missing", None)
-                        # If path changed, update the key
-                        if os.path.abspath(path) != abspath:
-                            manifest[os.path.abspath(path)] = entry
-                            del manifest[abspath]
-                            print(f"Restored missing file {uuid}: new path {path}")
-                        else:
-                            print(f"Restored missing file {uuid}: {path}")
-                        found_count += 1
-                        uuid_to_manifestkey.pop(uuid)
-                        # Don't break here: same uuid could in principle be present in multiple dirs.
+                    if uuid in uuids:
+                        found[uuid] = path
+    return found
+
+def update_manifest_entry_for_found_file(manifest, old_abspath, entry, found_path):
+    st = os.lstat(found_path)
+    tag = get_tag(found_path)
+    entry["mtime"] = int(st.st_mtime)
+    entry["ctime"] = int(st.st_ctime)
+    entry["size"] = int(st.st_size)
+    entry["tag"] = tag
+    entry["date_updated"] = datetime.datetime.now().isoformat()
+    entry.pop("date_missing", None)
+    # If path changed, update the manifest key
+    if os.path.abspath(found_path) != old_abspath:
+        manifest[os.path.abspath(found_path)] = entry
+        del manifest[old_abspath]
+    else:
+        manifest[old_abspath] = entry
+
+def rebuild_missing_files(manifest, rebuild_dirs):
+    missing = get_missing_manifest_entries(manifest)
+    if not missing:
+        print("No missing files found in manifest. Run --update first to mark missing files.")
+        return
+
+    uuid_to_manifestkey = build_uuid_lookup(missing)
+    if not uuid_to_manifestkey:
+        print("No missing files with valid TagSync UUID found in manifest.")
+        return
+
+    # Search for missing files by uuid
+    found = find_tagged_files_by_uuid(rebuild_dirs, set(uuid_to_manifestkey.keys()))
+    found_count = 0
+
+    # Update found entries in manifest
+    for uuid, found_path in found.items():
+        abspath, entry = uuid_to_manifestkey[uuid]
+        update_manifest_entry_for_found_file(manifest, abspath, entry, found_path)
+        if os.path.abspath(found_path) != abspath:
+            print(f"Restored missing file {uuid}: new path {found_path}")
+        else:
+            print(f"Restored missing file {uuid}: {found_path}")
+        found_count += 1
+
     # Print not found messages for remaining
-    for uuid, (abspath, entry) in uuid_to_manifestkey.items():
+    missing_uuids = set(uuid_to_manifestkey.keys()) - set(found.keys())
+    for uuid in missing_uuids:
         print(f"File for missing tag {uuid} not found in rebuild dirs.")
+
     if found_count == 0:
         print("No missing files were restored.")
 
