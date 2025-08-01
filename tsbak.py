@@ -9,14 +9,16 @@ XATTR_NAME = "user.backup_id"
 def show_help():
     print(f"""TagSync: tsbak.py
 Usage:
-  {sys.argv[0]} [-n name[,name2...]] <src1> [src2 ...] <dest> [more groups ...]
+  {sys.argv[0]} --from SRC [--from SRC2 ...] --to DEST [options]
 Options:
-  -n, --name NAMES    Only backup files/dirs tagged with these names (comma or semicolon separated). May repeat for groups.
+  -n, --name NAMES    Only backup files/dirs tagged with these names (comma or semicolon separated).
   -F, --follow        Follow symlinks (not recommended).
   --dry-run           Show what would be done, but don't actually copy.
   -v, --verbose       Extra output.
   -q, --quiet         Only warnings/errors.
   -h, --help          Show help.
+Examples:
+  {sys.argv[0]} --from mydir --from mydir2 --to /mnt/backup -n foo,bar --dry-run
 """)
 
 def log(msg, quiet):
@@ -106,38 +108,37 @@ def backup(src_list, dest, names=None, dry_run=False, verbose=False, quiet=False
         for obj in objs:
             backup_object(obj, abs_src, abs_dest, dry_run, verbose, quiet)
 
-def validate_input(paths):
-    if len(paths) < 2:
-        print("Need at least one source and a destination in each group.", file=sys.stderr)
-        return None, None
-    dest = paths[-1]
-    src_list = paths[:-1]
-    if not os.path.isdir(dest):
-        print(f"Destination {dest} is not a directory or not found. Skipping group.", file=sys.stderr)
-        return None, None
-    return src_list, dest
-
 def parse_args(argv):
     DRYRUN = VERBOSE = QUIET = FOLLOW = False
-    groups = []
-    cur_names = []
-    cur_srcs = []
+    names = []
+    from_srcs = []
+    to_dest = None
 
     args = argv[1:]
-    while args:
-        arg = args.pop(0)
-        if arg in ("-n", "--name"):
-            if not args or args[0].startswith("-"):
-                print("-n requires at least one name", file=sys.stderr)
+    i = 0
+    while i < len(args):
+        arg = args[i]
+        if arg == "--from":
+            i += 1
+            if i >= len(args):
+                print("--from requires an argument", file=sys.stderr)
                 sys.exit(1)
-            if len(cur_srcs) > 1:
-                print("Must specify only one destination per group", file=sys.stderr)
+            from_srcs.append(args[i])
+        elif arg == "--to":
+            i += 1
+            if i >= len(args):
+                print("--to requires an argument", file=sys.stderr)
                 sys.exit(1)
-            if cur_srcs:
-                groups.append((cur_names[:], cur_srcs[:]))
-                cur_srcs.clear()
-            names = [n.strip() for n in args.pop(0).replace(';', ',').split(',') if n.strip()]
-            cur_names = names
+            if to_dest is not None:
+                print("Only one --to destination may be supplied.", file=sys.stderr)
+                sys.exit(1)
+            to_dest = args[i]
+        elif arg in ("-n", "--name"):
+            i += 1
+            if i >= len(args):
+                print("-n/--name requires at least one name", file=sys.stderr)
+                sys.exit(1)
+            names = [n.strip() for n in args[i].replace(';', ',').split(',') if n.strip()]
         elif arg in ("-F", "--follow"):
             FOLLOW = True
         elif arg == "--dry-run":
@@ -154,20 +155,25 @@ def parse_args(argv):
             show_help()
             sys.exit(1)
         else:
-            cur_srcs.append(arg)
-    if cur_srcs:
-        groups.append((cur_names[:], cur_srcs[:]))
-    return groups, DRYRUN, VERBOSE, QUIET, FOLLOW
+            print(f"Unknown or misplaced argument: {arg}", file=sys.stderr)
+            show_help()
+            sys.exit(1)
+        i += 1
+
+    if not from_srcs:
+        print("At least one --from SRC must be supplied.", file=sys.stderr)
+        show_help()
+        sys.exit(1)
+    if not to_dest:
+        print("Exactly one --to DEST must be supplied.", file=sys.stderr)
+        show_help()
+        sys.exit(1)
+
+    return from_srcs, to_dest, names, DRYRUN, VERBOSE, QUIET, FOLLOW
 
 def main():
-    groups, DRYRUN, VERBOSE, QUIET, FOLLOW = parse_args(sys.argv)
-    if not groups:
-        show_help()
-    for names, paths in groups:
-        src_list, dest = validate_input(paths)
-        if not src_list:
-            continue
-        backup(src_list, dest, names, DRYRUN, VERBOSE, QUIET, FOLLOW)
+    from_srcs, to_dest, names, DRYRUN, VERBOSE, QUIET, FOLLOW = parse_args(sys.argv)
+    backup(from_srcs, to_dest, names, DRYRUN, VERBOSE, QUIET, FOLLOW)
 
 if __name__ == "__main__":
     main()
