@@ -108,6 +108,7 @@ def parse_args():
     flush = False
     scan_dirs = []
     update_manifest_flag = False
+    rebuild_dirs = []
     args = sys.argv[1:]
     i = 0
     while i < len(args):
@@ -127,18 +128,105 @@ def parse_args():
                 print("--scan requires at least one directory", file=sys.stderr)
                 show_help()
                 sys.exit(1)
-            # All subsequent args (until next flag or end) are directories to scan
             while i < len(args) and not args[i].startswith("-"):
                 scan_dirs.append(args[i])
                 i += 1
         elif arg == "--update":
             update_manifest_flag = True
             i += 1
+        elif arg == "--rebuild":
+            i += 1
+            if i >= len(args):
+                print("--rebuild requires at least one directory", file=sys.stderr)
+                show_help()
+                sys.exit(1)
+            while i < len(args) and not args[i].startswith("-"):
+                rebuild_dirs.append(args[i])
+                i += 1
         else:
             print(f"Unknown argument: {arg}", file=sys.stderr)
             show_help()
             sys.exit(1)
-    return flush, scan_dirs, update_manifest_flag
+    return flush, scan_dirs, update_manifest_flag, rebuild_dirs
+
+def rebuild_missing_files(manifest, rebuild_dirs):
+    # Build a list of manifest keys that are missing
+    missing = [(abspath, entry) for abspath, entry in manifest.items() if "date_missing" in entry]
+    if not missing:
+        print("No missing files found in manifest. Run --update first to mark missing files.")
+        return
+
+    # Map unique_id to manifest key
+    uuid_to_manifestkey = {}
+    for abspath, entry in missing:
+        tag = entry.get("tag", "")
+        if tag and tag.startswith("ts/"):
+            uuid = tag.split("/", 2)[1]  # ts/<uuid> or ts/<uuid>/names
+            uuid_to_manifestkey[uuid] = (abspath, entry)
+
+    # Walk all files under rebuild_dirs, looking for files with tags matching missing uuids
+    found_count = 0
+    for dir in rebuild_dirs:
+        for dirpath, dirnames, filenames in os.walk(dir):
+            for name in filenames + dirnames:
+                path = os.path.join(dirpath, name)
+                tag = get_tag(path)
+                if tag and tag.startswith("ts/"):
+                    uuid = tag.split("/", 2)[1]
+                    if uuid in uuid_to_manifestkey:
+                        abspath, entry = uuid_to_manifestkey[uuid]
+                        st = os.lstat(path)
+                        entry["mtime"] = int(st.st_mtime)
+                        entry["ctime"] = int(st.st_ctime)
+                        entry["size"] = int(st.st_size)
+                        entry["tag"] = tag
+                        entry["date_updated"] = datetime.datetime.now().isoformat()
+                        entry.pop("date_missing", None)
+                        # If path changed, update the key
+                        if os.path.abspath(path) != abspath:
+                            manifest[os.path.abspath(path)] = entry
+                            del manifest[abspath]
+                            print(f"Restored missing file {uuid}: new path {path}")
+                        else:
+                            print(f"Restored missing file {uuid}: {path}")
+                        found_count += 1
+                        uuid_to_manifestkey.pop(uuid)
+                        # Don't break here: same uuid could in principle be present in multiple dirs.
+    # Print not found messages for remaining
+    for uuid, (abspath, entry) in uuid_to_manifestkey.items():
+        print(f"File for missing tag {uuid} not found in rebuild dirs.")
+    if found_count == 0:
+        print("No missing files were restored.")
+
+def main():
+    if len(sys.argv) == 1:
+        show_help()
+        sys.exit(0)
+    flush, scan_dirs, update_manifest_flag, rebuild_dirs = parse_args()
+
+    if flush:
+        flush_manifest()
+        if not scan_dirs and not update_manifest_flag and not rebuild_dirs:
+            return
+
+    manifest = load_manifest(MANIFEST)
+
+    if scan_dirs:
+        validate_scan_dirs(scan_dirs)
+        scan_and_update_manifest(manifest, scan_dirs)
+
+    if update_manifest_flag:
+        changed = update_manifest_entries(manifest)
+        save_manifest(manifest, MANIFEST)
+        if verbose:
+            print(f"Manifest updated for existing files.")
+
+    if rebuild_dirs:
+        rebuild_missing_files(manifest, rebuild_dirs)
+        save_manifest(manifest, MANIFEST)
+
+if __name__ == "__main__":
+    main()
 
 def flush_manifest():
     save_manifest({}, MANIFEST)
