@@ -8,6 +8,8 @@ Unlike traditional backup tools, TagSync does not require you to move files to a
 
 A internal manifest of tagged is kept (at ~/.config/tagsync/manifest.json), but only for the sake of improving speed. It can be flushed and rebuilt without issue.
 
+NOTE: AI is being used to develop boiler-plate code and much of the readme.
+
 ## Workflow Example:
 You tag a file: it gets backed up.
 You move the file: the backup moves it, too.
